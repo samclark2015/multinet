@@ -1,0 +1,25 @@
+package:
+  name: multinet
+  version: {{ GIT_DESCRIBE_TAG }}
+
+source:
+  path: .
+
+build:
+  number: {{ CI_JOB_ID }}
+  script: python setup.py install --single-version-externally-managed --record=record.txt
+  noarch: python
+
+requirements:
+  build:
+    - python
+    - setuptools
+  run:
+    - python
+
+test:
+  imports:
+    - multinet
+
+about:
+  home: {{ CI_PROJECT_URL }}
