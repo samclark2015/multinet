@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
+
 from setuptools import setup, find_packages
 
-requirements = None
-with open('requirements.txt') as req_txt:
-    requirements = req_txt.readlines()
+
+PACKAGE_NAME = "multinet"
+
+dependencies = [
+    # 'numpy',
+]
 
 setup(
-    name='multinet',
-    version=1.0,
-    packages=find_packages(exclude=("tests",)),
-    install_requires=requirements
+    name=PACKAGE_NAME,
+    use_scm_version=dict(write_to=f"{PACKAGE_NAME}/version.py"),
+    packages=find_packages(),
+    install_requires=dependencies,
+    setup_requires=["setuptools_scm"],
 )
+

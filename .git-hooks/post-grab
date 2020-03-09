@@ -1,0 +1,6 @@
+#!/bin/bash
+python3 -m venv --system-site-packages venv
+source venv/bin/activate
+pip install -r requirements.txt
+echo "Virtual environment created in $PWD/venv"
+echo "Activate using '$PWD/venv/bin/activate[.csh|.fish]'"
