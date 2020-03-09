@@ -2,31 +2,40 @@ stages:
   - test
   - deploy
       
+
+variables:
+  PYTHON_VERSION: python3
+
+before_script:
+  - source ~gitlab-runner/.bashrc
+  - virtualenv --python $PYTHON_VERSION --system-site-packages venv
+  - source venv/bin/activate
+
+cache: 
+  paths:
+    - .cache/pip
+    - venv/
+
 # if pytest succeeds or no tests are run, continue to deploy
 pytest:
+  only:
+    - tags
   stage: test
   script:
-    - python3 -m pytest tests ; ret=$? ; [ $ret -eq 0 ] || [ $ret -eq 5 ] 
+    - >
+      if [ ! -s requirements.txt ] && python3 -m pytest --co; then
+        pip install -r requirements.txt
+        python3 -m pytest tests ; ret=$? ; [ $ret -eq 0 ] || [ $ret -eq 5 ] 
+      fi
 
-Conda Release:
+release:
   only:
     - tags
   stage: deploy
   variables:
-    CAD_CHANNEL: /home/cfsa/sclark/Documents/git_ci_tests/conda_repo/
+    PACKAGE_NAME: multinet
+    REL_ROOT: /ride/release/python/packages
   environment:
-    name: Conda
+    name: release
   script:
-    - mkdir dist
-    - conda-build --output-folder $CAD_CHANNEL .
-
-Filesystem Release:
-  only:
-    - tags
-  stage: deploy
-  variables:
-    RELEASE_DIR: /ride/release/python/lib/
-  environment:
-    name: Filesystem
-  script:
-    - python3 setup.py install --root $RELEASE_DIR
+    - ./setup.py sdist --dist-dir $REL_ROOT

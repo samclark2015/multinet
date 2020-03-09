@@ -1,0 +1,12 @@
+#!/bin/bash
+source venv/bin/activate
+pip freeze --local | diff requirements.txt - > /dev/null
+if [ $? -ne 0 ]
+then
+    pip freeze --local > requirements.txt
+    git add requirements.txt
+    echo "Requirements were not up-to-date! Re-run commit; they have been updated automatically."
+    false
+else
+    true
+fi
