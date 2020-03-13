@@ -21,7 +21,6 @@ class HttpRequest(Request):
     def __init__(self, server=HTTP_SERVER, polling_period=1.0) -> None:
         self.server = server
         self.polling_period = polling_period
-        self.log = logging.getLogger(self.__class__.__name__)
         self._context = ""
         self._callbacks: Dict[str, Callback] = {}
         self._cancel_async = False
@@ -34,16 +33,16 @@ class HttpRequest(Request):
         for entry in entries:
             payload = dict(zip(keys, entry))
             httpreq = self.server + "/DeviceServer/api/device/metaData"
-            self.log.debug("request: %s", httpreq)
-            self.log.debug("GETTING ADO DATA: %s", payload)
+            self.logger.debug("request: %s", httpreq)
+            self.logger.debug("GETTING ADO DATA: %s", payload)
 
             r = requests.get(
                 httpreq, params=payload, headers={"Accept": "application/json"}
             )
-            self.log.debug("<requests.get: %s, text: %s", r, r.text)
+            self.logger.debug("<requests.get: %s, text: %s", r, r.text)
             if r.status_code != requests.codes.ok:  # pylint: disable=no-member
-                error = r.headers["CAD-Error"]
-                self.log.error(
+                error = r.headers.get("CAD-Error")
+                self.logger.error(
                     "Failed to get meta data - HTTP Error: %d, data: %s",
                     r.status_code,
                     error,
@@ -60,16 +59,16 @@ class HttpRequest(Request):
         names, props = self._unpack_args(*entries, timestamp_required=timestamp)
         payload = dict(names=names, props=props, ppmuser=ppm_user)
         httpreq = self.server + "/DeviceServer/api/device/list/valueAndTime"
-        self.log.debug("request: %s", httpreq)
-        self.log.debug("GETTING ADO DATA: %s", payload)
+        self.logger.debug("request: %s", httpreq)
+        self.logger.debug("GETTING ADO DATA: %s", payload)
 
         r = requests.get(
             httpreq, params=payload, headers={"Accept": "application/json"}
         )
-        self.log.debug("<requests.get: %s, text: %s", r, r.text)
+        self.logger.debug("<requests.get: %s, text: %s", r, r.text)
         if r.status_code != requests.codes.ok:  # pylint: disable=no-member
-            error = r.headers["CAD-Error"]
-            self.log.error(
+            error = r.headers.get("CAD-Error")
+            self.logger.error(
                 "Failed to get meta data - HTTP Error: %d, data: %s",
                 r.status_code,
                 error,
@@ -104,15 +103,15 @@ class HttpRequest(Request):
         }
         url = self.server + "/DeviceServer/api/device/list/value"
         headers = {"Accept": "application/json"}
-        self.log.debug("PUT %s <%s>: %s", url, headers, payload)
+        self.logger.debug("PUT %s <%s>: %s", url, headers, payload)
         try:
             r = requests.put(url, params=payload, headers=headers)
         except requests.exceptions.RequestException as exc:
-            self.log.error("Exception: %s", exc)
+            self.logger.error("Exception: %s", exc)
             raise
         if r.status_code != requests.codes.ok:  # pylint: disable=no-member
-            error = r.headers["CAD-Error"]
-            self.log.error(
+            error = r.headers.get("CAD-Error")
+            self.logger.error(
                 "Failed to set value - HTTP Error %d, data: %s", r.status_code, error
             )
             raise ValueError(error)
@@ -187,13 +186,13 @@ class HttpRequest(Request):
                                 )  # call the user callback
                 time.sleep(self.polling_period)
             else:
-                error = r.headers["CAD-Error"]
-                self.log.error(
+                error = r.headers.get("CAD-Error")
+                self.logger.error(
                     "Failed to process async - HTTP Error: %d, %s", r.status_code, error
                 )
 
                 return 1
-        self.log.info("_getAsync_thread: exiting")
+        self.logger.info("_getAsync_thread: exiting")
         return 0
 
     def _get_context(self):
@@ -213,7 +212,7 @@ class HttpRequest(Request):
             try:
                 r = requests.get(httpreq, params=payload)
             except requests.exceptions.RequestException as e:
-                self.log.error("get context failed: " + str(e))
+                self.logger.error("get context failed: " + str(e))
                 return 2
 
             self._context = r.text

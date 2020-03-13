@@ -8,9 +8,7 @@ from typing import *
 
 from cad_io import cns
 
-from .request import Entry, Metadata, Request
-
-logger = logging.getLogger(__name__)
+from .request import Entry, Metadata, Request, Callback
 
 
 class AdoRequest(Request):
@@ -22,11 +20,10 @@ class AdoRequest(Request):
         self.async_thread = None
         self.handles = {}
         self._async_keymap = {}
-
-        logger.debug("PyADO2 Instantiated")
+        print(self.logger.name)
 
     def get_async(
-        self, callback, *entries: Entry, ppm_user=1, timestamp=True, **kwargs
+        self, callback: Callback, *entries: Entry, ppm_user=1, timestamp=True, **kwargs
     ) -> None:
         """
         Get ADO parameters synchronously
@@ -40,19 +37,19 @@ class AdoRequest(Request):
             raise ValueError("Callback must be callable")
         if ppm_user < 1 or ppm_user > 8:
             raise ValueError("PPM User must be 1 - 8")
-        logger.debug("args[%d]: %s", len(entries), entries)
+        self.logger.debug("args[%d]: %s", len(entries), entries)
         request_list = self._unpack_args(*entries, timestamp_required=timestamp)
         if self.async_receiver is None:
             self.async_receiver = cns.asyncReceiver(self._unpack_callback)
             rc = self.async_receiver.start()
             if rc:
-                logger.error("asyncServer start code:" + str(rc))
+                self.logger.error("asyncServer start code: %d", rc)
                 return None
             self.async_receiver.newdata()
             self.async_thread = threading.Thread(target=self._get_async_thread)
             self.async_thread.start()
 
-        logger.debug("request_list: %s", request_list)
+        self.logger.debug("request_list: %s", request_list)
         for group in request_list:
             self._async_keymap.update({v: k for k, v in group.items()})
             values = group.values()
@@ -60,10 +57,12 @@ class AdoRequest(Request):
                 list=(list(values), self.async_receiver), ppmIndex=ppm_user - 1
             )
             self.callbacks[tid] = callback
-            logger.debug("adoGetAsync status, tid:" + str((status, tid)))
+            self.logger.debug("adoGetAsync status, tid: %s", (status, tid))
             if status:
-                logger.error("adoGetAsync: %s, failed for %s", status, request_list)
-            logger.debug("receiver_thread started, tid: %d", tid)
+                self.logger.error(
+                    "adoGetAsync: %s, failed for %s", status, request_list
+                )
+            self.logger.debug("receiver_thread started, tid: %d", tid)
 
     def get(
         self, *entries: Entry, ppm_user=1, timestamp=True, **kwargs
@@ -75,7 +74,7 @@ class AdoRequest(Request):
         :param ppm_user: int; PPM User 1 - 8 (default 1)
         :return: dict
         """
-        logger.debug("get(%s)", entries)
+        self.logger.debug("get(%s)", entries)
         request_list = self._unpack_args(*entries, timestamp_required=timestamp)
         rval = OrderedDict()
         # Check PPM User is valid
@@ -96,10 +95,10 @@ class AdoRequest(Request):
                 rval.update(group_results)
         except IndexError:
             msg = f"One of the parameters is invalid: {entries}"
-            logger.error(msg)
+            self.logger.error(msg)
             raise ValueError(msg)
 
-        logger.debug("rval: %s", rval)
+        self.logger.debug("rval: %s", rval)
         return rval
 
     @lru_cache(maxsize=32)
@@ -138,9 +137,9 @@ class AdoRequest(Request):
         request_list = self._unpack_args(
             *entries, timestamp_required=False, is_set=True
         )
-        logger.debug("request_list: %s", request_list)
+        self.logger.debug("request_list: %s", request_list)
         if len(request_list) == 0:
-            logger.error("Request not created")
+            self.logger.error("Request not created")
             return False
         # v17#with self.pyadoLock:
         results = []
@@ -149,7 +148,7 @@ class AdoRequest(Request):
             err_code = cns.adoSet(list=vals, ppmIndex=ppm_user - 1)
             results.append(err_code == 0)
             if err_code:
-                logger.error("Error setting for %s, ", group)
+                self.logger.error("Error setting for %s, ", group)
         return all(results)
 
     def cancel_async(self):
@@ -157,14 +156,14 @@ class AdoRequest(Request):
         if self.async_receiver is not None:
             rc = cns.adoStopAsync(self.async_receiver, 0)
             if rc is None:
-                logger.debug("Async server stopped")
+                self.logger.debug("Async server stopped")
                 self.async_receiver = None
             else:
-                logger.error(
+                self.logger.error(
                     "Error stopping async server; connections may still be alive! (return code %d)",
                     rc,
                 )
-            logger.debug(
+            self.logger.debug(
                 "stopped async server, number of threads: %d", threading.active_count()
             )
 
@@ -197,7 +196,7 @@ class AdoRequest(Request):
                             value,
                         )
                     except IndexError:
-                        logger.error(
+                        self.logger.error(
                             "Set value missing for %s", str(entry),
                         )
                         return []
@@ -220,7 +219,7 @@ class AdoRequest(Request):
         # separate thread to wait for data
         for data in self.async_receiver.newdata():  # type: ignore
             self._unpack_callback(data)
-        logger.debug(
+        self.logger.debug(
             "receiver_thread finished, number of threads: %d", threading.active_count()
         )
 
@@ -233,8 +232,8 @@ class AdoRequest(Request):
             sources = [
                 self._async_keymap[k] for k in sources if k in self._async_keymap
             ]
-            logger.debug("_callback_unpacker:sources:\n" + str(sources))
-            logger.debug("_callback_unpacker:values:\n" + str(values))
+            self.logger.debug("_callback_unpacker:sources:\n%s", sources)
+            self.logger.debug("_callback_unpacker:values:\n%s", values)
             results = {}
             # add ppmuser
             # fill the adopar_dict elements
@@ -243,10 +242,10 @@ class AdoRequest(Request):
                     results[key] = (
                         values[i][0] if len(values[i]) == 1 else list(values[i])
                     )
-                except Exception as exc:
-                    logger.error("in unpackCallback: " + str(exc))
-                    logger.error("values[%i" % len(values) + "]")
-                    logger.error("values[0][%i" % len(values[0]) + "]")
+                except Exception as exc:  # pylint: disable=broad-except
+                    self.logger.error("in unpackCallback: %s", exc)
+                    self.logger.error("values[%i]", len(values))
+                    self.logger.error("values[0][%i]", len(values[0]))
                     return
 
             # now call the user callback function
@@ -260,20 +259,20 @@ class AdoRequest(Request):
         else:
             where = cns.cnslookup(name)
             if where is None:
-                logger.warning("No such name %s", name)
+                self.logger.warning("No such name %s", name)
                 return None
             ado_handle = cns.adoName.create(where)
             if not isinstance(ado_handle, cns.adoName):
-                logger.warning("No such ADO %s", name)
+                self.logger.warning("No such ADO %s", name)
                 return None
 
             # This section is essential only for subsequent adoSet,
             # it will need the metadataDict.
             meta_data = cns.adoMetaData(ado_handle)
             if not isinstance(meta_data, dict):
-                logger.warning("Invalid metadata %s", str(meta_data))
+                self.logger.warning("Invalid metadata %s", meta_data)
                 return None
 
-            logger.debug("ado created: %s", name)
+            self.logger.debug("ado created: %s", name)
             self.handles[name] = ado_handle
         return ado_handle

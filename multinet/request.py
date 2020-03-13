@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import *
+import logging
 
 Entry = tuple
 Metadata = Dict[str, Any]
@@ -8,6 +9,11 @@ Callback = Callable[[Dict[Entry, Any], int], None]
 
 class Request(ABC):
     """Request interface"""
+
+    @property
+    @classmethod
+    def logger(cls):
+        return logging.getLogger(cls.__name__)
 
     @abstractmethod
     def get(self, *entries: Entry, **kwargs) -> Dict[Entry, Any]:
@@ -22,12 +28,7 @@ class Request(ABC):
         ...
 
     @abstractmethod
-    def get_async(
-        self,
-        callback: Callback,
-        *entries: Entry,
-        **kwargs
-    ) -> None:
+    def get_async(self, callback: Callback, *entries: Entry, **kwargs) -> None:
         """Get data from device asynchronously
         
         Arguments:
