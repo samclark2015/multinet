@@ -19,6 +19,7 @@ HTTP_SERVER = "http://csgateway01.pbn.bnl.gov"
 
 class HttpRequest(Request):
     def __init__(self, server=HTTP_SERVER, polling_period=1.0) -> None:
+        super().__init__()
         self.server = server
         self.polling_period = polling_period
         self._context = ""
@@ -181,6 +182,7 @@ class HttpRequest(Request):
                             matched = [[v for v in g] for _, g in grouped]
                             for group in zip(*matched):
                                 zipped_dict = dict(group)
+                                zipped_dict = self._filter_data(zipped_dict, ppm_user)
                                 self._callbacks[rid](
                                     zipped_dict, ppm_user
                                 )  # call the user callback

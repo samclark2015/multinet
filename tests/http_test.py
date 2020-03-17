@@ -55,3 +55,7 @@ def test_async(req: HttpRequest):
     with condition:
         condition.wait_for(lambda: counter >= 20)
     req.cancel_async()
+
+
+def test_cdev(req: HttpRequest):
+    req.get(("simple.cdev2", "doubleS"))

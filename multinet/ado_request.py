@@ -1,4 +1,3 @@
-import logging
 import threading
 from collections import OrderedDict
 from itertools import groupby
@@ -13,6 +12,7 @@ from .request import Entry, Metadata, Request, Callback
 
 class AdoRequest(Request):
     def __init__(self):
+        super().__init__()
         self.pyado_lock = threading.Lock()
 
         self.callbacks = {}
@@ -227,7 +227,7 @@ class AdoRequest(Request):
         with self.pyado_lock:
             values = args[0][0]
             tid = args[0][1]
-            ppm_user = args[0][3] + 1  # ppmuser should be one for whole groupfo
+            ppm_user = args[0][3] + 1  # ppmuser should be one for whole group
             sources = [(s[0], s[1], s[2]) for s in args[0][2]]
             sources = [
                 self._async_keymap[k] for k in sources if k in self._async_keymap
@@ -235,8 +235,6 @@ class AdoRequest(Request):
             self.logger.debug("_callback_unpacker:sources:\n%s", sources)
             self.logger.debug("_callback_unpacker:values:\n%s", values)
             results = {}
-            # add ppmuser
-            # fill the adopar_dict elements
             for i, key in enumerate(sources):
                 try:
                     results[key] = (
@@ -248,8 +246,15 @@ class AdoRequest(Request):
                     self.logger.error("values[0][%i]", len(values[0]))
                     return
 
+            filtered_results = self._filter_data(results, ppm_user)
+            keys_to_remove = [[(*key[:2], "timestampSeconds"), ((*key[:2], "timestampNanoSeconds"))] for key in results if key not in filtered_results]
+            for keys in keys_to_remove:
+                for key in keys:
+                    if key in filtered_results:
+                        del filtered_results[key]
             # now call the user callback function
-            self.callbacks[tid](results, ppm_user)
+            if filtered_results:
+                self.callbacks[tid](filtered_results, ppm_user)
 
     def _get_ado_handle(self, name):
         """get handle to ADO if it was already created, 

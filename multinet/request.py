@@ -5,15 +5,16 @@ import logging
 Entry = tuple
 Metadata = Dict[str, Any]
 Callback = Callable[[Dict[Entry, Any], int], None]
+Filter = Callable[[Dict[Entry, Any], int], Dict[Entry, Any]]
 
 
 class Request(ABC):
     """Request interface"""
 
-    @property
-    @classmethod
-    def logger(cls):
-        return logging.getLogger(cls.__name__)
+    logger = property(lambda self: logging.getLogger(self.__class__.__name__))
+
+    def __init__(self):
+        self._filters: List[Filter] = list()
 
     @abstractmethod
     def get(self, *entries: Entry, **kwargs) -> Dict[Entry, Any]:
@@ -65,3 +66,11 @@ class Request(ABC):
     def cancel_async(self):
         """Cancel all asynchronous requests"""
         ...
+
+    def add_filter(self, filter_: Filter):
+        self._filters.append(filter_)
+
+    def _filter_data(self, data, ppm_user):
+        for filter_ in self._filters:
+            data = filter_(data, ppm_user)
+        return data
