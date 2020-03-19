@@ -1,5 +1,6 @@
 import socket
 import logging
+import warnings
 from ipaddress import ip_address, ip_network
 from collections import defaultdict
 from enum import Enum
@@ -19,8 +20,8 @@ def is_controls_host(ip=None):
             host_name = socket.gethostname()
             ip = socket.gethostbyname(host_name)
         except:
-            print("Unable to get Hostname and IP")
-            return
+            warnings.warn("Unable to get Hostname and IP")
+            return False
     return ip_address(ip) in ip_network("130.199.104.0/23") or ip_address(
         ip
     ) in ip_network("130.199.108.0/23")
