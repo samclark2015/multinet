@@ -17,7 +17,7 @@ cache:
     - venv/
 
 # if pytest succeeds or no tests are run, continue to deploy
-pytest:
+.pytest:
   only:
     - tags
   stage: test
