@@ -17,7 +17,7 @@ class Request(ABC):
         self._filters: List[Filter] = list()
 
     @abstractmethod
-    def get(self, *entries: Entry, **kwargs) -> Dict[Entry, Any]:
+    def get(self, *entries: Entry, ppm_user=1, **kwargs) -> Dict[Entry, Any]:
         """Get data from device synchronously
         
         Arguments:
@@ -29,17 +29,22 @@ class Request(ABC):
         ...
 
     @abstractmethod
-    def get_async(self, callback: Callback, *entries: Entry, **kwargs) -> None:
+    def get_async(
+        self, callback: Callback, *entries: Entry, immediate=False, ppm_user=1, **kwargs
+    ) -> None:
         """Get data from device asynchronously
         
         Arguments:
             callback {Callable[[Dict[Entry, Any]], None]} -- callback with arguments <data>, <ppm_user>
             *entries {Entry} -- Entries, in form of (<device>, <param>, <prop>)
+        
+        Keyword Arguments:
+            immediate {bool} -- should callback be called immediately after get_async (default: False)
         """
         ...
 
     @abstractmethod
-    def get_meta(self, *entries: Entry, **kwargs) -> Dict[Entry, Metadata]:
+    def get_meta(self, *entries: Entry, ppm_user=1, **kwargs) -> Dict[Entry, Metadata]:
         """Get metadata for entries
 
         Arguments:
@@ -51,7 +56,7 @@ class Request(ABC):
         ...
 
     @abstractmethod
-    def set(self, *entries: Entry, **kwargs) -> bool:
+    def set(self, *entries: Entry, ppm_user=1, **kwargs) -> bool:
         """Set data
         
         Arguments:
@@ -74,3 +79,10 @@ class Request(ABC):
         for filter_ in self._filters:
             data = filter_(data, ppm_user)
         return data
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.cancel_async()
+

@@ -122,7 +122,7 @@ class HttpRequest(Request):
         self._cancel_async = True
 
     def get_async(
-        self, callback: Callback, *entries: Entry, ppm_user=1, **kwargs
+        self, callback: Callback, *entries: Entry, ppm_user=1, immediate=False, **kwargs
     ) -> None:
         """ Asynchronous get. 
         The user defined function callback(*args) will be called 
@@ -139,15 +139,16 @@ class HttpRequest(Request):
         )  # subscription ID, should be used in subsequent polling for result.
         self._callbacks[rid] = callback  # register the callback function
         self._cancel_async = False
-        thread = threading.Thread(target=self._async_thread, args=(rid,))
+        thread = threading.Thread(target=self._async_thread, args=(rid, immediate))
         thread.start()
 
-    def _async_thread(self, rid):
+    def _async_thread(self, rid, immediate):
         # internal thread function. It polls for http results and
         # calls user callback when any data have been received
         payload = {"id": rid}
         headers = {"Accept": "application/json"}
         url = HTTP_SERVER + "/DeviceServer/api/device/async/result"
+        count = 0
         while not self._cancel_async:
             r = requests.get(url, payload, headers=headers)
             if r.status_code == requests.codes.ok:  # pylint: disable=no-member
@@ -181,11 +182,14 @@ class HttpRequest(Request):
                             )
                             matched = [[v for v in g] for _, g in grouped]
                             for group in zip(*matched):
-                                zipped_dict = dict(group)
-                                zipped_dict = self._filter_data(zipped_dict, ppm_user)
-                                self._callbacks[rid](
-                                    zipped_dict, ppm_user
-                                )  # call the user callback
+                                if immediate or count > 0:
+                                    zipped_dict = dict(group)
+                                    zipped_dict = self._filter_data(zipped_dict, ppm_user)
+                                    if zipped_dict:
+                                        self._callbacks[rid](
+                                            zipped_dict, ppm_user
+                                        )  # call the user callback
+                                count += 1
                 time.sleep(self.polling_period)
             else:
                 error = r.headers.get("CAD-Error")

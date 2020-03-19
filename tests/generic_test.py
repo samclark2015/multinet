@@ -5,28 +5,34 @@ from time import sleep
 
 import pytest
 
-from multinet import filters, Multirequest
+from multinet import filters
+from multinet.ado_request import AdoRequest
+from multinet.cdev_request import CDEVRequest
+from multinet.http_request import HttpRequest
 from multinet.request import Request
 
 
-@pytest.fixture(scope="function")
-def req():
-    return Multirequest()
-
-
 @pytest.mark.parametrize(
-    "entries",
-    [([("simple.sam", "sinM", "timestampSeconds")]), ([("simple.cdev", "doubleS")]),],
+    "req,entries",
+    [
+        (AdoRequest(), [("simple.sam", "sinM", "timestampSeconds")]),
+        (HttpRequest(), [("simple.sam", "sinM", "timestampSeconds")]),
+        (CDEVRequest(), [("simple.cdev", "doubleS")]),
+    ],
 )
-def test_meta(req: Multirequest, entries):
+def test_meta(req, entries):
     meta = req.get_meta(*entries)
     assert isinstance(meta, dict)
     assert all(key in meta for key in entries)
 
 
 @pytest.mark.parametrize(
-    "entries",
-    [([("simple.sam", "sinM", "timestampSeconds")]), ([("simple.cdev", "doubleS")]),],
+    "req,entries",
+    [
+        (AdoRequest(), [("simple.sam", "sinM", "timestampSeconds")]),
+        (HttpRequest(), [("simple.sam", "sinM", "timestampSeconds")]),
+        (CDEVRequest(), [("simple.cdev", "doubleS")]),
+    ],
 )
 def test_get(req: Request, entries):
     data = req.get(*entries)
@@ -35,7 +41,12 @@ def test_get(req: Request, entries):
 
 
 @pytest.mark.parametrize(
-    "entries", [([("simple.sam", "sinM")]), ([("simple.cdev", "sinM")]),],
+    "req,entries",
+    [
+        (AdoRequest(), [("simple.sam", "sinM")]),
+        (HttpRequest(), [("simple.sam", "sinM")]),
+        (CDEVRequest(), [("simple.cdev", "sinM")]),
+    ],
 )
 def test_get_async(req: Request, entries):
     counter = 0
@@ -58,10 +69,11 @@ def test_get_async(req: Request, entries):
 
 
 @pytest.mark.parametrize(
-    "entries,set_vals",
+    "req,entries,set_vals",
     [
-        ([("simple.sam", "intS")], [1, 2, 2, 3, 4]),
-        ([("simple.cdev", "doubleS")], [1, 2, 2, 3, 4]),
+        (AdoRequest(), [("simple.sam", "intS")], [1, 2, 2, 3, 4]),
+        (HttpRequest(), [("simple.sam", "intS")], [1, 2, 2, 3, 4]),
+        (CDEVRequest(), [("simple.cdev", "doubleS")], [1, 2, 2, 3, 4]),
     ],
 )
 def test_get_async_filter(req: Request, entries, set_vals):
@@ -98,10 +110,11 @@ def test_get_async_filter(req: Request, entries, set_vals):
 
 
 @pytest.mark.parametrize(
-    "entries",
+    "req,entries",
     [
-        ([("simple.sam", "intS", randint(0, 255))]),
-        ([("simple.cdev", "doubleS", float(randint(0, 255)))]),
+        (AdoRequest(), [("simple.sam", "intS", randint(0, 255))]),
+        (HttpRequest(), [("simple.sam", "intS", randint(0, 255))]),
+        (CDEVRequest(), [("simple.cdev", "doubleS", float(randint(0, 255)))]),
     ],
 )
 def test_set(req: Request, entries):

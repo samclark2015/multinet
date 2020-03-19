@@ -20,10 +20,15 @@ class AdoRequest(Request):
         self.async_thread = None
         self.handles = {}
         self._async_keymap = {}
-        print(self.logger.name)
 
     def get_async(
-        self, callback: Callback, *entries: Entry, ppm_user=1, timestamp=True, **kwargs
+        self,
+        callback: Callback,
+        *entries: Entry,
+        ppm_user=1,
+        timestamp=True,
+        immediate=False,
+        **kwargs,
     ) -> None:
         """
         Get ADO parameters synchronously
@@ -38,12 +43,16 @@ class AdoRequest(Request):
         if ppm_user < 1 or ppm_user > 8:
             raise ValueError("PPM User must be 1 - 8")
         self.logger.debug("args[%d]: %s", len(entries), entries)
+
+        if immediate:
+            callback(self.get(*entries, ppm_user=ppm_user, timestamp=timestamp), ppm_user)
+
         request_list = self._unpack_args(*entries, timestamp_required=timestamp)
         if self.async_receiver is None:
             self.async_receiver = cns.asyncReceiver(self._unpack_callback)
-            rc = self.async_receiver.start()
-            if rc:
-                self.logger.error("asyncServer start code: %d", rc)
+            return_code = self.async_receiver.start()
+            if return_code:
+                self.logger.error("asyncServer start code: %d", return_code)
                 return None
             self.async_receiver.newdata()
             self.async_thread = threading.Thread(target=self._get_async_thread)
@@ -76,7 +85,7 @@ class AdoRequest(Request):
         """
         self.logger.debug("get(%s)", entries)
         request_list = self._unpack_args(*entries, timestamp_required=timestamp)
-        rval = OrderedDict()
+        rval = dict()
         # Check PPM User is valid
         if ppm_user < 1 or ppm_user > 8:
             raise ValueError("PPM User must be 1 - 8")
@@ -247,7 +256,11 @@ class AdoRequest(Request):
                     return
 
             filtered_results = self._filter_data(results, ppm_user)
-            keys_to_remove = [[(*key[:2], "timestampSeconds"), ((*key[:2], "timestampNanoSeconds"))] for key in results if key not in filtered_results]
+            keys_to_remove = [
+                [(*key[:2], "timestampSeconds"), ((*key[:2], "timestampNanoSeconds"))]
+                for key in results
+                if key not in filtered_results
+            ]
             for keys in keys_to_remove:
                 for key in keys:
                     if key in filtered_results:

@@ -1,12 +1,15 @@
-from .request import Request, Entry, Callback
+import traceback
+from collections.abc import Iterable
+from itertools import groupby
+from operator import itemgetter
 from threading import Lock
 from typing import *
-from collections import Iterable
+
 from cad_io import cns
 from cad_io.cdev import tags
 from cad_io.cdev.clip import ClipConnection, ClipData, ClipPacket
-from itertools import groupby
-from operator import itemgetter
+
+from .request import Callback, Entry, Request
 
 
 class CDEVRequest(Request):
@@ -39,6 +42,7 @@ class CDEVRequest(Request):
         device: Union[str, List[str]] = None,
         trans_idx=None,
         cancel_trans_idx=None,
+        expecting_data=True,
     ) -> ClipPacket:
         """Internal method to send data to server"""
         if isinstance(device, str):
@@ -66,8 +70,9 @@ class CDEVRequest(Request):
         packet.set_message(message)
 
         conn.send(packet)
-        response = conn.receive()
-        return response
+        if expecting_data:
+            response = conn.receive()
+            return response
 
     def send(
         self,
@@ -75,7 +80,7 @@ class CDEVRequest(Request):
         message,
         request_data: dict = None,
         context: dict = None,
-        device: str = None,
+        device: Union[str, List[str]] = None,
     ):
         """
         Send a message
@@ -85,7 +90,7 @@ class CDEVRequest(Request):
 
         Keyword arguments:
         request_data: dict -- request data to send with message
-        device: [str|list] -- device or list of devices to send message
+        device: Union[str, List[str]] -- device or list of devices to send message
         """
         with ClipConnection(server) as conn:
             resp = self._send(conn, message, request_data, context, device)
@@ -147,7 +152,7 @@ class CDEVRequest(Request):
         success = True
         for server, entries in entries.items():
             with ClipConnection(server) as conn:
-                for ent_name, ent_data in entries.items():
+                for _, ent_data in entries.items():
                     device = ent_data[0]
                     prop = ent_data[1]
                     tag = ent_data[2]
@@ -162,21 +167,27 @@ class CDEVRequest(Request):
                     )
                     success &= resp.completion_code is None
         return success
-        #             responses[ent_name] = resp.request_data[tag]
-        #             if timestamp and tags.TIMESTAMP in resp.request_data:
-        #                 responses[
-        #                     (device, prop, "timestampSeconds")
-        #                 ] = resp.request_data[tags.TIMESTAMP]
-        # return responses
 
-    def _async_handler(self, data):
-        data = CDEVResponse(data)
-        async_data = self._asyncs.get(data.transaction, dict())
-        callback = async_data.get("callback")
-        if callable(callback):
-            callback(data)
+    def _async_handler(self, resp: ClipPacket):
+        try:
+            async_data = self._asyncs[resp._trans_index]
+            callback = async_data["callback"]
+            ppm_user = async_data["ppm"]
+            entry = async_data["entry"]
+            tag = async_data["tag"]
+            timestamp = async_data["timestamp"]
+            response = {entry: resp.request_data[tag]}
+            if timestamp and tags.TIMESTAMP in resp.request_data:
+                response[(*entry[:2], "timestampSeconds")] = resp.request_data[
+                    tags.TIMESTAMP
+                ]
+            callback(response, ppm_user)
+        except Exception:  # pylint: disable=broad-except
+            traceback.print_exc()
 
-    def get_async(self, device: str, prop: str, callback):
+    def get_async(
+        self, callback: Callback, *entries: Entry, ppm_user=1, timestamp=True, **kwargs
+    ):
         """
         Registers async handler and requests updates from server
 
@@ -188,30 +199,48 @@ class CDEVRequest(Request):
         Returns:
         idx: int -- transaction index (pass to cancel_async method)
         """
-        if self._async_conn is None:
-            self._async_conn = self._conn.clone()
-            self._async_conn.open(on_receive=self._async_handler)
+        entries = self._unpack_entries(*entries)
+        for server, entries in entries.items():
+            conn = ClipConnection(server)
+            conn.open(on_receive=self._async_handler)
+            for ent_name, ent_data in entries.items():
+                device, prop = ent_data[:2]
+                trans_idx = self._get_trans_idx()
+                message = f"monitorOn {prop}"
+                self._asyncs[trans_idx] = {
+                    "trans_idx": trans_idx,
+                    "callback": callback,
+                    "entry": ent_name,
+                    "conn": conn,
+                    "server": server,
+                    "ppm": ppm_user,
+                    "timestamp": timestamp,
+                    "tag": ent_data[-1],
+                }
+                self._send(
+                    conn,
+                    message,
+                    device=device,
+                    trans_idx=trans_idx,
+                    context=dict(ppmuser=ppm_user),
+                    expecting_data=False,
+                )
 
-        trans_idx = self._get_trans_idx()
-        message = f"monitorOn {prop}"
-        self._asyncs[trans_idx] = {"callback": callback, "device": device, "prop": prop}
-        self._send(message, device=device, trans_idx=trans_idx, conn=self._async_conn)
-        return trans_idx
-
-    def cancel_async(self, idx: int):
-        """
-        Deregisters async handler and disconnects once all handlers are removed
-
-        Arguments:
-        idx: int -- transaction index of async request to cancel
-        """
-        async_data = self._asyncs.pop(idx, dict())
-        device = async_data.get("device")
-        prop = async_data.get("prop")
-        message = f"monitorOff {prop}"
-        self._send(message, cancel_trans_idx=idx, conn=self._async_conn, device=device)
-        if not self._asyncs:
-            self._async_conn.close()
+    def cancel_async(self):
+        for conn, entries in groupby(self._asyncs.values(), itemgetter("conn")):
+            for entry in entries:
+                tid = entry["trans_idx"]
+                device = entry["entry"][0]
+                prop = entry["entry"][1]
+                message = f"monitorOff {prop}"
+                self._send(
+                    conn,
+                    message,
+                    cancel_trans_idx=tid,
+                    device=device,
+                    expecting_data=False,
+                )
+            conn.close()
 
     def _unpack_entries(self, *entries, is_set=False) -> Dict[str, Dict[Entry, Entry]]:
         entries = [tuple(ent) for ent in entries]
@@ -230,8 +259,15 @@ class CDEVRequest(Request):
                 )
                 if is_set:
                     value = entry[-1]
-                    group_requests[entry] = (device, param_name, prop_name, entry[-1])
+                    group_requests[entry] = (device, param_name, prop_name, value)
                 else:
                     group_requests[entry] = (device, param_name, prop_name)
             requests[server] = group_requests
         return requests
+
+if __name__ == "__main__":
+    import time
+    req = CDEVRequest()
+    req.get_async(print, ("simple.cdev", "sinM"))
+    time.sleep(5)
+    req.cancel_async()

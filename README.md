@@ -1,25 +1,31 @@
-# multinet
+# Python Multinet
 
-## Initial Setup
-This project is a template for a future app called `multinet`.
-Some modifications need to be made for it to do something useful!
+## Purpose
 
--   **All sources & resources go into `multinet/`**  
-    Anything out side of this subdirectory does not get installed with the package.
--   **Modify this readme to suit your package!**
+The Multinet package provides Python developers a protocol-agnostic toolkit to access ADOs through the ADO, CDEV, and HTTP (via DeviceServer) protocols.
 
-## Relative Imports
-This is a Python package, and needs to be treated like one during development. This means using Relative Imports &mdash; [Relative Import Info](https://realpython.com/absolute-vs-relative-python-imports/#relative-imports)
+## Usage
 
-## Dependencies
-Make sure to list any and all packages *your* package depends on in the `dependencies` list within `setup.py`. If you do not specify all dependent packages here, your package may work within certain Python environments, but not all. 
+```python
+from multinet import Multirequest
 
-## A Note on Virtual Environments
-To ensure a reproducible build of this package, a virtual environment has been set up in the `venv/` directory. Packages used in the development of your package should be installed here. 
-- `source venv/bin/activate[.csh|.fish]`
-- `venv/bin/pip install <package>`
+# Create a multirequest instance
+request = Multirequest()
 
-## Creating a Release
-1. Ensure all changes are commited using `git add` and `git commit`
-2. Run `git release` from the terminal and follow prompts
-3. Wait about a minute for your package to be assembled on the server (You can check the progress on the Gitlab continuous integration page of your project.)
+# Getting data synchronously from an ADO device and a CDEV device in one call
+request.get(("simple.test", "intS"), ("simple.cdev", "degM"))
+# With a PPM User (this kwarg can be used on any call)
+request.get(("simple.test", "intS"), ppm_user=5)
+
+# Getting data asynchronously
+def callback(data, ppm_user):
+    print(data, ppm_user)
+
+request.get_async(callback, ("simple.test", "sinM"), ("simple.cdev", "degM"))
+
+# Setting data
+request.set(("simple.test", "intS", 7), ("simple.cdev", "doubleS", 3.14))
+```
+
+## Implementation Details
+Three protocols are implemented: ADO, CDEV, and HTTP. Currently, due to the immature nature of the CDEV Python protocol library, the HTTP interface through DeviceServer is being used for all CDEV requests currently. In the future, direct communication with CDEV devices may be enabled allowing HTTP requests to be used as a fallback.

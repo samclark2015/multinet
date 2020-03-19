@@ -7,6 +7,7 @@ from functools import partial, lru_cache
 
 from .ado_request import AdoRequest
 from .http_request import HttpRequest
+from .cdev_request import CDEVRequest
 from .request import Entry, Metadata, Request, Callback
 
 
@@ -27,13 +28,14 @@ class EntryType(Enum):
 
 class Multirequest(Request):
     def __init__(self):
-        # Entries should be grouped by FEC
+        super().__init__()
         self._ado_req = AdoRequest()
+        self._cdev_req = CDEVRequest()
         self._http_req = HttpRequest()
 
         self._requests = {
             EntryType.ADO: self._ado_req,
-            EntryType.CDEV: self._http_req,
+            EntryType.CDEV: self._cdev_req,
             EntryType.HTTP: self._http_req,
         }
 
@@ -52,32 +54,25 @@ class Multirequest(Request):
             request = self._requests[type_]
             request.get_async(callback, *entries[type_], **kwargs)
 
-    def async_handler(self, *entries, ppm_user: Union[int, List[int]] = 1):
-        """
-        Decorator for function which takes parameters device, param, values, ppm_user
-        :param entries: One or more tuple(<ado_name>, <parameter_name>, [property_name]); property_name defaults to 'value'
-        :param ppm_user: int; PPM User 1 - 8 (default 1)
-        :return:
-        """
+    # def async_handler(self, *entries, ppm_user: Union[int, List[int]] = 1):
+    #     def callback(func: Callback, data: Dict[Entry, Any], ppm_user: int):
+    #         try:
+    #             func(data, ppm_user)
+    #         except Exception as e:
+    #             self.logger.warning(f"Error handling callback for {data.keys()}")
+    #             self.logger.info(traceback.format_exc())
 
-        def callback(func: Callback, data: Dict[Entry, Any], ppm_user: int):
-            try:
-                func(data, ppm_user)
-            except Exception as e:
-                self.logger.warning(f"Error handling callback for {data.keys()}")
-                self.logger.info(traceback.format_exc())
+    #     def wrapper(func):
+    #         if isinstance(ppm_user, Iterable):
+    #             for user in ppm_user:
+    #                 self.get_async(partial(callback, func), *entries, ppm_user=user)
+    #         elif isinstance(ppm_user, int):
+    #             self.get_async(partial(callback, func), *entries, ppm_user=ppm_user)
+    #         else:
+    #             raise ValueError("PPM User must be int 1 - 8, or list of ints 1 - 8")
+    #         return func
 
-        def wrapper(func):
-            if isinstance(ppm_user, Iterable):
-                for user in ppm_user:
-                    self.get_async(partial(callback, func), *entries, ppm_user=user)
-            elif isinstance(ppm_user, int):
-                self.get_async(partial(callback, func), *entries, ppm_user=ppm_user)
-            else:
-                raise ValueError("PPM User must be int 1 - 8, or list of ints 1 - 8")
-            return func
-
-        return wrapper
+    #     return wrapper
 
     def get_meta(self, *entries, **kwargs) -> Dict[Entry, Metadata]:
         results = dict()
@@ -97,7 +92,8 @@ class Multirequest(Request):
         return results
 
     def cancel_async(self):
-        self._ado_req.cancel_async()
+        for req in self._requests.values():
+            req.cancel_async()
 
     @staticmethod
     def _process_entries(entries):
@@ -110,3 +106,4 @@ class Multirequest(Request):
             results[type_].append(entry)
         return results
 
+    
