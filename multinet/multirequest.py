@@ -1,14 +1,29 @@
+import socket
+import logging
+from ipaddress import ip_address, ip_network
 from collections import defaultdict
 from enum import Enum
 from typing import *
-import traceback
+
 from cad import cns3
-from functools import partial, lru_cache
 
 from .ado_request import AdoRequest
-from .http_request import HttpRequest
 from .cdev_request import CDEVRequest
-from .request import Entry, Metadata, Request, Callback
+from .http_request import HttpRequest
+from .request import Callback, Entry, Metadata, Request
+
+
+def is_controls_host(ip=None):
+    if not ip:
+        try:
+            host_name = socket.gethostname()
+            ip = socket.gethostbyname(host_name)
+        except:
+            print("Unable to get Hostname and IP")
+            return
+    return ip_address(ip) in ip_network("130.199.104.0/23") or ip_address(
+        ip
+    ) in ip_network("130.199.108.0/23")
 
 
 class EntryType(Enum):
@@ -18,10 +33,11 @@ class EntryType(Enum):
 
     @classmethod
     def get_type(cls, type_):
-        if type_ in ("ADO",):
-            return cls.ADO
-        elif type_ in ("CDEVDEVICE",):
-            return cls.HTTP
+        if is_controls_host():
+            if type_ in ("ADO",):
+                return cls.ADO
+            elif type_ in ("CDEVDEVICE",):
+                return cls.HTTP
         else:
             return cls.HTTP
 
@@ -48,7 +64,7 @@ class Multirequest(Request):
             results.update(res)
         return results
 
-    def get_async(self, callback, *entries: Entry, **kwargs) -> None:
+    def get_async(self, callback: Callback, *entries: Entry, **kwargs) -> None:
         entries = self._process_entries(entries)
         for type_ in entries:
             request = self._requests[type_]
@@ -95,15 +111,14 @@ class Multirequest(Request):
         for req in self._requests.values():
             req.cancel_async()
 
-    @staticmethod
-    def _process_entries(entries):
+    @classmethod
+    def _process_entries(cls, entries):
         results = defaultdict(list)
 
         for entry in entries:
             device = entry[0]
             cns_entry = cns3.cnslookup(device)
             type_ = EntryType.get_type(cns_entry.type)
+            logging.debug("Using %s for %s", type_, entry)
             results[type_].append(entry)
         return results
-
-    
