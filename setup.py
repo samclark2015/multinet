@@ -7,6 +7,7 @@ PACKAGE_NAME = "multinet"
 
 dependencies = [
     # 'numpy',
+    "cad_io"
 ]
 
 setup(
@@ -16,4 +17,3 @@ setup(
     install_requires=dependencies,
     setup_requires=["setuptools_scm"],
 )
-
