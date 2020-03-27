@@ -6,7 +6,6 @@ from setuptools import setup, find_packages
 PACKAGE_NAME = "multinet"
 
 dependencies = [
-    # 'numpy',
     "cad_io"
 ]
 
