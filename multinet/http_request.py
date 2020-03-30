@@ -184,7 +184,9 @@ class HttpRequest(Request):
                             for group in zip(*matched):
                                 if immediate or count > 0:
                                     zipped_dict = dict(group)
-                                    zipped_dict = self._filter_data(zipped_dict, ppm_user)
+                                    zipped_dict = self._filter_data(
+                                        zipped_dict, ppm_user
+                                    )
                                     if zipped_dict:
                                         self._callbacks[rid](
                                             zipped_dict, ppm_user
@@ -208,8 +210,8 @@ class HttpRequest(Request):
             uname = getpass.getuser()
             payload = {
                 "user": uname,
-                "procName": sys.argv[0],
-                "procId": pid,
+                "procName": sys.argv[0] or __name__,
+                "procId": int(pid),
                 "machine": host,
             }
 
