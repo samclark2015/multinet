@@ -5,9 +5,7 @@ from setuptools import setup, find_packages
 
 PACKAGE_NAME = "multinet"
 
-dependencies = [
-    "cad_io"
-]
+dependencies = ["cad_io"]
 
 setup(
     name=PACKAGE_NAME,

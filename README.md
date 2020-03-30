@@ -27,5 +27,11 @@ request.get_async(callback, ("simple.test", "sinM"), ("simple.cdev", "degM"))
 request.set(("simple.test", "intS", 7), ("simple.cdev", "doubleS", 3.14))
 ```
 
+## Changes from pyado
+
+- PPM users index from 1, instead of 0
+- Multiple async callbacks may be defined
+
 ## Implementation Details
+
 Three protocols are implemented: ADO, CDEV, and HTTP. Currently, due to the immature nature of the CDEV Python protocol library, the HTTP interface through DeviceServer is being used for all CDEV requests currently. In the future, direct communication with CDEV devices may be enabled allowing HTTP requests to be used as a fallback.
