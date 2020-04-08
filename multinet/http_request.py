@@ -92,7 +92,7 @@ class HttpRequest(Request):
 
         return data
 
-    def set(self, *entries: Entry, ppm_user=1, **kwargs) -> bool:
+    def set(self, *entries: Entry, ppm_user=1, **kwargs) -> None:
         context = self._get_context()
         names, props, values = self._unpack_args(*entries, is_set=True)
         payload = {
@@ -116,7 +116,6 @@ class HttpRequest(Request):
                 "Failed to set value - HTTP Error %d, data: %s", r.status_code, error
             )
             raise ValueError(error)
-        return True
 
     def cancel_async(self):
         self._cancel_async = True
