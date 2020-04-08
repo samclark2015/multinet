@@ -11,6 +11,11 @@ def req():
     return AdoRequest()
 
 
+def test_array(req):
+    data = req.get(("simple.test", "charArrayS"), ("simple.test", "charS"))
+    assert isinstance(data[("simple.test", "charArrayS")], list)
+
+
 def test_meta(req):
     meta = req.get_meta(("simple.sam", "sinM", "timestampSeconds"))
     assert isinstance(meta, dict)
@@ -55,7 +60,6 @@ def test_get_async_filter(req):
     set_counter = 0
     condition = Condition()
 
-
     def set_thread():
         nonlocal set_counter
         while set_counter < len(set_vals):
@@ -77,7 +81,9 @@ def test_get_async_filter(req):
     with condition:
         condition.wait_for(lambda: counter >= 4 or set_counter >= len(set_vals))
     req.cancel_async()
-    assert set_counter == len(set_vals) and counter == 4, f"{set_counter} sets; {counter} received"
+    assert (
+        set_counter == len(set_vals) and counter == 4
+    ), f"{set_counter} sets; {counter} received"
 
 
 def test_get_entries_list(req):
@@ -97,4 +103,3 @@ def test_set(req):
     sleep(1)
     assert val1 == 254
     assert req.set(("simple.sam", "intS", val))
-
