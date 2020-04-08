@@ -45,7 +45,9 @@ class AdoRequest(Request):
         self.logger.debug("args[%d]: %s", len(entries), entries)
 
         if immediate:
-            callback(self.get(*entries, ppm_user=ppm_user, timestamp=timestamp), ppm_user)
+            callback(
+                self.get(*entries, ppm_user=ppm_user, timestamp=timestamp), ppm_user
+            )
 
         request_list = self._unpack_args(*entries, timestamp_required=timestamp)
         if self.async_receiver is None:
@@ -100,7 +102,7 @@ class AdoRequest(Request):
             for group in request_list:
                 keys, values = group.keys(), group.values()
                 group_return, _ = cns.adoGet(list=list(values), ppmIndex=ppm_user - 1)
-                group_results = dict(zip(keys, [v[0] for v in group_return]))
+                group_results = dict(zip(keys, [v[0] if len(v) == 1 else list(v) for v in group_return]))
                 rval.update(group_results)
         except IndexError:
             msg = f"One of the parameters is invalid: {entries}"
@@ -286,11 +288,17 @@ class AdoRequest(Request):
 
             # This section is essential only for subsequent adoSet,
             # it will need the metadataDict.
-            meta_data = cns.adoMetaData(ado_handle)
-            if not isinstance(meta_data, dict):
-                self.logger.warning("Invalid metadata %s", meta_data)
-                return None
+            # meta_data = cns.adoMetaData(ado_handle)
+            # if not isinstance(meta_data, dict):
+            #     self.logger.warning("Invalid metadata %s", meta_data)
+            #     return None
 
             self.logger.debug("ado created: %s", name)
             self.handles[name] = ado_handle
         return ado_handle
+
+
+if __name__ == "__main__":
+    req = AdoRequest()
+    data = req.get(("simple.test", "charArrayS"))
+    assert isinstance(data[("simple.test", "charArrayS")], list)
