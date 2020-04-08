@@ -5,6 +5,7 @@ from ipaddress import ip_address, ip_network
 from collections import defaultdict
 from enum import Enum
 from typing import *
+from functools import lru_cache
 
 from cad import cns3
 
@@ -44,6 +45,8 @@ class EntryType(Enum):
 
 
 class Multirequest(Request):
+    _types = dict()
+
     def __init__(self):
         super().__init__()
         self._ado_req = AdoRequest()
@@ -118,8 +121,12 @@ class Multirequest(Request):
 
         for entry in entries:
             device = entry[0]
-            cns_entry = cns3.cnslookup(device)
-            type_ = EntryType.get_type(cns_entry.type)
+            if device in cls._types:
+                type_ = cls._types[device]
+            else:
+                cns_entry = cns3.cnslookup(device)
+                type_ = EntryType.get_type(cns_entry.type)
+                cls._types[device] = type_
             logging.debug("Using %s for %s", type_, entry)
             results[type_].append(entry)
         return results
