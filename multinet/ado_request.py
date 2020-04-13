@@ -102,7 +102,9 @@ class AdoRequest(Request):
             for group in request_list:
                 keys, values = group.keys(), group.values()
                 group_return, _ = cns.adoGet(list=list(values), ppmIndex=ppm_user - 1)
-                group_results = dict(zip(keys, [v[0] if len(v) == 1 else list(v) for v in group_return]))
+                group_results = dict(
+                    zip(keys, [v[0] if len(v) == 1 else list(v) for v in group_return])
+                )
                 rval.update(group_results)
         except IndexError:
             msg = f"One of the parameters is invalid: {entries}"
