@@ -289,9 +289,9 @@ class AdoRequest(Request):
             # This section is essential only for subsequent adoSet,
             # it will need the metadataDict.
             # meta_data = cns.adoMetaData(ado_handle)
-            # if not isinstance(meta_data, dict):
-            #     self.logger.warning("Invalid metadata %s", meta_data)
-            #     return None
+            if not isinstance(meta_data, dict):
+                self.logger.warning("Invalid metadata %s", meta_data)
+                return None
 
             self.logger.debug("ado created: %s", name)
             self.handles[name] = ado_handle
