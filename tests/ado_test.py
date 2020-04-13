@@ -17,13 +17,13 @@ def test_array(req):
 
 
 def test_meta(req):
-    meta = req.get_meta(("simple.sam", "sinM", "timestampSeconds"))
+    meta = req.get_meta(("simple.test", "sinM", "timestampSeconds"))
     assert isinstance(meta, dict)
     logging.info(meta)
 
 
 def test_get(req: AdoRequest):
-    keys = [("simple.sam", "sinM"), ("simple.sam.sys5", "sinM")]
+    keys = [("simple.test", "sinM"), ("simple.test.sys5", "sinM")]
     data = req.get(*keys)
     assert isinstance(data, dict)
     assert all(key in data for key in keys)
@@ -32,7 +32,7 @@ def test_get(req: AdoRequest):
 def test_get_async(req):
     import math
 
-    keys = [("simple.sam", "sinM"), ("simple.sam", "degM")]
+    keys = [("simple.test", "sinM"), ("simple.test", "degM")]
     counter = 0
     condition = Condition()
 
@@ -55,7 +55,7 @@ def test_get_async_filter(req):
     import math
 
     set_vals = [1, 2, 2, 3, 4]
-    keys = [("simple.sam", "intS")]
+    keys = [("simple.test", "intS")]
     counter = 0
     set_counter = 0
     condition = Condition()
@@ -87,7 +87,7 @@ def test_get_async_filter(req):
 
 
 def test_get_entries_list(req):
-    keys = [("simple.sam:sinM"), ("simple.sam.sys5:sinM")]
+    keys = [("simple.test:sinM"), ("simple.test.sys5:sinM")]
     ent = [tuple(key.split(":")) for key in keys]
     data = req.get(*ent)
     assert isinstance(data, dict)
@@ -97,9 +97,9 @@ def test_get_entries_list(req):
 def test_set(req):
     from time import sleep
 
-    val = req.get(("simple.sam", "intS"))[("simple.sam", "intS")]
-    assert req.set(("simple.sam", "intS", 254))
-    val1 = req.get(("simple.sam", "intS"))[("simple.sam", "intS")]
+    val = req.get(("simple.test", "intS"))[("simple.test", "intS")]
+    assert req.set(("simple.test", "intS", 254))
+    val1 = req.get(("simple.test", "intS"))[("simple.test", "intS")]
     sleep(1)
     assert val1 == 254
-    assert req.set(("simple.sam", "intS", val))
+    assert req.set(("simple.test", "intS", val))
