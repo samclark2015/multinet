@@ -8,6 +8,10 @@ Callback = Callable[[Dict[Entry, Any], int], None]
 Filter = Callable[[Dict[Entry, Any], int], Dict[Entry, Any]]
 
 
+class MultinetError(Exception):
+    pass
+
+
 class Request(ABC):
     """Request interface"""
 
@@ -44,7 +48,9 @@ class Request(ABC):
         ...
 
     @abstractmethod
-    def get_meta(self, *entries: Entry, ppm_user=1, **kwargs) -> Dict[Entry, Metadata]:
+    def get_meta(
+        self, *entries: Entry, ppm_user=1, **kwargs
+    ) -> Dict[Entry, Union[Metadata, MultinetError]]:
         """Get metadata for entries
 
         Arguments:
@@ -56,14 +62,14 @@ class Request(ABC):
         ...
 
     @abstractmethod
-    def set(self, *entries: Entry, ppm_user=1, **kwargs) -> bool:
+    def set(self, *entries: Entry, ppm_user=1, **kwargs) -> Optional[MultinetError]:
         """Set data
         
         Arguments:
             *entries {Entry} -- Entries, in form of (<device>, <param>, <prop>)
         
         Returns:
-            bool -- [description]
+            bool -- did set succeed
         """
         ...
 
@@ -73,6 +79,11 @@ class Request(ABC):
         ...
 
     def add_filter(self, filter_: Filter):
+        """Add filter for asynchronous requests
+        
+        Arguments:
+            filter_ {Filter} -- filter function
+        """
         self._filters.append(filter_)
 
     def _filter_data(self, data, ppm_user):
@@ -85,4 +96,3 @@ class Request(ABC):
 
     def __exit__(self, *args):
         self.cancel_async()
-

@@ -9,7 +9,7 @@ from cad_io import cns
 from cad_io.cdev import tags
 from cad_io.cdev.clip import ClipConnection, ClipData, ClipPacket
 
-from .request import Callback, Entry, Request
+from .request import Callback, Entry, Request, MultinetError
 
 
 class CDEVRequest(Request):
@@ -120,9 +120,9 @@ class CDEVRequest(Request):
                     )
                     responses[ent_name] = resp.request_data[tag]
                     if timestamp and tags.TIMESTAMP in resp.request_data:
-                        responses[
-                            (device, prop, "timestampSeconds")
-                        ] = resp.request_data[tags.TIMESTAMP]
+                        responses[(device, prop, "timestamp")] = resp.request_data[
+                            tags.TIMESTAMP
+                        ]
         return responses
 
     def get_meta(self, *entries: Entry, **kwargs):
@@ -139,7 +139,7 @@ class CDEVRequest(Request):
                     }
         return responses
 
-    def set(self, *entries: Entry, ppm_user=1, **kwargs):
+    def set(self, *entries: Entry, ppm_user=1, **kwargs) -> Optional[MultinetError]:
         """
         Set value of property on device
 
@@ -149,10 +149,10 @@ class CDEVRequest(Request):
         val: any -- new value of property
         """
         entries = self._unpack_entries(*entries, is_set=True)
-        success = True
+        errors = []
         for server, entries in entries.items():
             with ClipConnection(server) as conn:
-                for _, ent_data in entries.items():
+                for ent_key, ent_data in entries.items():
                     device = ent_data[0]
                     prop = ent_data[1]
                     tag = ent_data[2]
@@ -165,8 +165,9 @@ class CDEVRequest(Request):
                         request_data={tags.key_to_tag(tag): value},
                         context=dict(ppmuser=ppm_user),
                     )
-                    success &= resp.completion_code is None
-        return success
+                    if resp.completion_code is not None:
+                        errors.append(f"Failed to set {ent_key}")
+        return MultinetError("; ".join(errors)) if errors else None
 
     def _async_handler(self, resp: ClipPacket):
         try:
@@ -178,9 +179,7 @@ class CDEVRequest(Request):
             timestamp = async_data["timestamp"]
             response = {entry: resp.request_data[tag]}
             if timestamp and tags.TIMESTAMP in resp.request_data:
-                response[(*entry[:2], "timestampSeconds")] = resp.request_data[
-                    tags.TIMESTAMP
-                ]
+                response[(*entry[:2], "timestamp")] = resp.request_data[tags.TIMESTAMP]
             callback(response, ppm_user)
         except Exception:  # pylint: disable=broad-except
             traceback.print_exc()
@@ -265,8 +264,10 @@ class CDEVRequest(Request):
             requests[server] = group_requests
         return requests
 
+
 if __name__ == "__main__":
     import time
+
     req = CDEVRequest()
     req.get_async(print, ("simple.cdev", "sinM"))
     time.sleep(5)

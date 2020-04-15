@@ -1,13 +1,11 @@
 import threading
-from collections import OrderedDict
 from itertools import groupby
 from operator import itemgetter
 from functools import lru_cache
 from typing import *
-
 from cad_io import cns
 
-from .request import Entry, Metadata, Request, Callback
+from .request import Entry, Metadata, Request, Callback, MultinetError
 
 
 class AdoRequest(Request):
@@ -52,10 +50,7 @@ class AdoRequest(Request):
         request_list = self._unpack_args(*entries, timestamp_required=timestamp)
         if self.async_receiver is None:
             self.async_receiver = cns.asyncReceiver(self._unpack_callback)
-            return_code = self.async_receiver.start()
-            if return_code:
-                self.logger.error("asyncServer start code: %d", return_code)
-                return None
+            self.async_receiver.start()
             self.async_receiver.newdata()
             self.async_thread = threading.Thread(target=self._get_async_thread)
             self.async_thread.start()
@@ -67,7 +62,7 @@ class AdoRequest(Request):
             status, tid = cns.adoGetAsync(
                 list=(list(values), self.async_receiver), ppmIndex=ppm_user - 1
             )
-            self.callbacks[tid] = callback
+            self.callbacks[tid] = (callback, group.keys())
             self.logger.debug("adoGetAsync status, tid: %s", (status, tid))
             if status:
                 self.logger.error(
@@ -90,7 +85,7 @@ class AdoRequest(Request):
         rval = dict()
         # Check PPM User is valid
         if ppm_user < 1 or ppm_user > 8:
-            raise ValueError("PPM User must be 1 - 8")
+            raise MultinetError("PPM User must be 1 - 8")
 
         if len(request_list) == 0:
             msg = "ADO not found: " + str(entries)
@@ -101,21 +96,30 @@ class AdoRequest(Request):
             # cns-v300:adoreturn = cns.adoGet( list = request_list )
             for group in request_list:
                 keys, values = group.keys(), group.values()
-                group_return, _ = cns.adoGet(list=list(values), ppmIndex=ppm_user - 1)
-                group_results = dict(
-                    zip(keys, [v[0] if len(v) == 1 else list(v) for v in group_return])
-                )
+                group_return, err = cns.adoGet(list=list(values), ppmIndex=ppm_user - 1)
+                if err == 0:
+                    group_results = dict(
+                        zip(
+                            keys,
+                            [v[0] if len(v) == 1 else list(v) for v in group_return],
+                        )
+                    )
+                else:
+                    group_results = {key: MultinetError(err) for key in keys}
+                group_results = self._convert_ts(keys, group_results)
                 rval.update(group_results)
         except IndexError:
             msg = f"One of the parameters is invalid: {entries}"
             self.logger.error(msg)
-            raise ValueError(msg)
+            raise MultinetError(msg)
 
         self.logger.debug("rval: %s", rval)
         return rval
 
     @lru_cache(maxsize=32)
-    def get_meta(self, *entries: Entry, **kwargs) -> Dict[Entry, Metadata]:
+    def get_meta(
+        self, *entries: Entry, **kwargs
+    ) -> Dict[Entry, Union[Metadata, MultinetError]]:
         """
         Get metadata for ado
         :param ado: Name of ADO; returns list of parameters
@@ -138,7 +142,7 @@ class AdoRequest(Request):
                     response[entry] = meta[(entry[1], entry[2])]._asdict()
         return response
 
-    def set(self, *entries: Entry, ppm_user=1, **kwargs) -> bool:
+    def set(self, *entries: Entry, ppm_user=1, **kwargs) -> Optional[MultinetError]:
         """
         Synchronously set ADO parameters
         :param args: One or more tuple(<ado_name>, <parameter_name>, [property_name], <value>); property_name defaults to 'value'
@@ -146,41 +150,54 @@ class AdoRequest(Request):
         :return: True if successful
         """
         if ppm_user < 1 or ppm_user > 8:
-            raise ValueError("PPM User must be 1 - 8")
+            raise MultinetError("PPM User must be 1 - 8")
         request_list = self._unpack_args(
             *entries, timestamp_required=False, is_set=True
         )
         self.logger.debug("request_list: %s", request_list)
         if len(request_list) == 0:
             self.logger.error("Request not created")
-            return False
+            return MultinetError("Error creating request")
         # v17#with self.pyadoLock:
-        results = []
+        errors = []
         for group in request_list:
             vals = list(group.values())
             err_code = cns.adoSet(list=vals, ppmIndex=ppm_user - 1)
-            results.append(err_code == 0)
-            if err_code:
-                self.logger.error("Error setting for %s, ", group)
-        return all(results)
+            if err_code != 0:
+                errors.append(f"Error setting {group}: {err_code}")
+        return MultinetError("; ".join(errors)) if errors else None
 
     def cancel_async(self):
         self._async_keymap.clear()
         if self.async_receiver is not None:
-            rc = cns.adoStopAsync(self.async_receiver, 0)
-            if rc is None:
+            err_code = cns.adoStopAsync(self.async_receiver, 0)
+            if err_code is None:
                 self.logger.debug("Async server stopped")
                 self.async_receiver = None
             else:
                 self.logger.error(
                     "Error stopping async server; connections may still be alive! (return code %d)",
-                    rc,
+                    err_code,
                 )
             self.logger.debug(
                 "stopped async server, number of threads: %d", threading.active_count()
             )
 
     # Private Methods
+    @staticmethod
+    def _convert_ts(entries, data):
+        for entry in entries:
+            if entry in data and (*entry[:2], "timestampSeconds") in data:
+                ts = float(data[(*entry[:2], "timestampSeconds")])
+                if (*entry[:2], "timestampNanoSeconds") in data:
+                    ts += data[(*entry[:2], "timestampNanoSeconds")] / 1e9
+                del (
+                    data[(*entry[:2], "timestampNanoSeconds")],
+                    data[(*entry[:2], "timestampSeconds")],
+                )
+                data[(*entry[:2], "timestamp")] = ts
+        return data
+
     def _unpack_args(
         self, *entries, timestamp_required=True, is_set=False
     ) -> List[Dict[Entry, Entry]]:
@@ -271,7 +288,9 @@ class AdoRequest(Request):
                         del filtered_results[key]
             # now call the user callback function
             if filtered_results:
-                self.callbacks[tid](filtered_results, ppm_user)
+                callback, entries = self.callbacks[tid]
+                filtered_results = self._convert_ts(entries, filtered_results)
+                callback(filtered_results, ppm_user)
 
     def _get_ado_handle(self, name):
         """get handle to ADO if it was already created, 
@@ -302,5 +321,5 @@ class AdoRequest(Request):
 
 if __name__ == "__main__":
     req = AdoRequest()
-    data = req.get(("simple.test", "charArrayS"))
-    assert isinstance(data[("simple.test", "charArrayS")], list)
+    resp = req.get(("simple.test", "charArrayS"))
+    assert isinstance(resp[("simple.test", "charArrayS")], list)

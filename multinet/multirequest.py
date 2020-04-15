@@ -5,7 +5,6 @@ from ipaddress import ip_address, ip_network
 from collections import defaultdict
 from enum import Enum
 from typing import *
-from functools import lru_cache
 
 from cad import cns3
 
@@ -15,16 +14,16 @@ from .http_request import HttpRequest
 from .request import Callback, Entry, Metadata, Request
 
 
-def is_controls_host(ip=None):
-    if not ip:
+def is_controls_host(ip_addr=None):
+    if not ip_addr:
         try:
             host_name = socket.gethostname()
-            ip = socket.gethostbyname(host_name)
-        except:
+            ip_addr = socket.gethostbyname(host_name)
+        except:  # pylint: disable=bare-except
             warnings.warn("Unable to get Hostname and IP")
             return False
-    return ip_address(ip) in ip_network("130.199.104.0/23") or ip_address(
-        ip
+    return ip_address(ip_addr) in ip_network("130.199.104.0/23") or ip_address(
+        ip_addr
     ) in ip_network("130.199.108.0/23")
 
 
@@ -45,7 +44,7 @@ class EntryType(Enum):
 
 
 class Multirequest(Request):
-    _types = dict()
+    _types: Dict[str, EntryType] = dict()
 
     def __init__(self):
         super().__init__()

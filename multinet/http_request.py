@@ -1,5 +1,4 @@
 import getpass
-import logging
 import os
 import socket
 import sys
@@ -12,7 +11,7 @@ from operator import itemgetter
 from typing import *
 import requests
 
-from .request import Entry, Metadata, Request, Callback
+from .request import Entry, Metadata, Request, Callback, MultinetError
 
 HTTP_SERVER = "http://csgateway01.pbn.bnl.gov"
 
@@ -23,12 +22,14 @@ class HttpRequest(Request):
         self.server = server
         self.polling_period = polling_period
         self._context = ""
-        self._callbacks: Dict[str, Callback] = {}
+        self._callbacks: Dict[str, Tuple[Callback, bool]] = {}
         self._cancel_async = False
         self._lock = threading.Lock()
 
     @lru_cache(maxsize=32)
-    def get_meta(self, *entries: Entry, **kwargs) -> Dict[Entry, Metadata]:
+    def get_meta(
+        self, *entries: Entry, **kwargs
+    ) -> Dict[Entry, Union[Metadata, MultinetError]]:
         keys = ["name", "prop", "ppmuser"]
         metadata = {}
         for entry in entries:
@@ -57,7 +58,7 @@ class HttpRequest(Request):
         self, *entries: Entry, ppm_user=1, timestamp=True, **kwargs
     ) -> Dict[Entry, Any]:
         data = {}
-        names, props = self._unpack_args(*entries, timestamp_required=timestamp)
+        names, props = self._unpack_args(*entries)
         payload = dict(names=names, props=props, ppmuser=ppm_user)
         httpreq = self.server + "/DeviceServer/api/device/list/valueAndTime"
         self.logger.debug("request: %s", httpreq)
@@ -87,12 +88,12 @@ class HttpRequest(Request):
                 type_ = entry["type"]
                 value = self._convert_value(value, type_)
                 data[key] = value
-                if "timestamp" in entry:
-                    data[(*key[:2], "timestampSeconds")] = entry["timestamp"]
+                if timestamp and "timestamp" in entry:
+                    data[(*key[:2], "timestamp")] = entry["timestamp"]
 
         return data
 
-    def set(self, *entries: Entry, ppm_user=1, **kwargs) -> None:
+    def set(self, *entries: Entry, ppm_user=1, **kwargs) -> Optional[MultinetError]:
         context = self._get_context()
         names, props, values = self._unpack_args(*entries, is_set=True)
         payload = {
@@ -109,19 +110,26 @@ class HttpRequest(Request):
             r = requests.put(url, params=payload, headers=headers)
         except requests.exceptions.RequestException as exc:
             self.logger.error("Exception: %s", exc)
-            raise
+            return MultinetError(exc)
         if r.status_code != requests.codes.ok:  # pylint: disable=no-member
             error = r.headers.get("CAD-Error")
             self.logger.error(
                 "Failed to set value - HTTP Error %d, data: %s", r.status_code, error
             )
-            raise ValueError(error)
+            return MultinetError(error)
+        return None
 
     def cancel_async(self):
         self._cancel_async = True
 
     def get_async(
-        self, callback: Callback, *entries: Entry, ppm_user=1, immediate=False, **kwargs
+        self,
+        callback: Callback,
+        *entries: Entry,
+        ppm_user=1,
+        immediate=False,
+        timestamp=True,
+        **kwargs,
     ) -> None:
         """ Asynchronous get. 
         The user defined function callback(*args) will be called 
@@ -136,7 +144,7 @@ class HttpRequest(Request):
         rid = (
             r.text
         )  # subscription ID, should be used in subsequent polling for result.
-        self._callbacks[rid] = callback  # register the callback function
+        self._callbacks[rid] = callback, timestamp  # register the callback function
         self._cancel_async = False
         thread = threading.Thread(target=self._async_thread, args=(rid, immediate))
         thread.start()
@@ -148,6 +156,7 @@ class HttpRequest(Request):
         headers = {"Accept": "application/json"}
         url = HTTP_SERVER + "/DeviceServer/api/device/async/result"
         count = 0
+        callback, timestamp = self._callbacks[rid]
         while not self._cancel_async:
             r = requests.get(url, payload, headers=headers)
             if r.status_code == requests.codes.ok:  # pylint: disable=no-member
@@ -171,10 +180,8 @@ class HttpRequest(Request):
                             type_ = entry["type"]
                             value = self._convert_value(value, type_)
                             results.append((key, value))
-                            if "timestamp" in entry:
-                                data[(*key[:2], "timestampSeconds")] = entry[
-                                    "timestamp"
-                                ]
+                            if timestamp and "timestamp" in entry:
+                                data[(*key[:2], "timestamp")] = entry["timestamp"]
                         with self._lock:
                             grouped = groupby(
                                 sorted(results, key=itemgetter(0)), itemgetter(0),
@@ -187,7 +194,7 @@ class HttpRequest(Request):
                                         zipped_dict, ppm_user
                                     )
                                     if zipped_dict:
-                                        self._callbacks[rid](
+                                        callback(
                                             zipped_dict, ppm_user
                                         )  # call the user callback
                                 count += 1
@@ -217,9 +224,9 @@ class HttpRequest(Request):
             httpreq = self.server + "/DeviceServer/api/device/context"
             # we don't need to process as json since this request will return io simple text value
             try:
-                r = requests.get(httpreq, params=payload)
-            except requests.exceptions.RequestException as e:
-                self.logger.error("get context failed: " + str(e))
+                r = requests.get(httpreq, params=payload)  # type: ignore
+            except requests.exceptions.RequestException as exc:
+                self.logger.error("get context failed: %s", exc)
                 return 2
 
             self._context = r.text
@@ -239,9 +246,7 @@ class HttpRequest(Request):
         return val
 
     @staticmethod
-    def _unpack_args(
-        *entries: Entry, timestamp_required=True, is_set=False
-    ) -> Tuple[str, ...]:
+    def _unpack_args(*entries: Entry, is_set=False) -> Tuple[str, ...]:
         entries = [tuple(ent) for ent in entries]
         names, props, values = [], [], []
         for entry in entries:
