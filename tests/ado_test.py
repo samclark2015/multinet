@@ -98,8 +98,8 @@ def test_set(req):
     from time import sleep
 
     val = req.get(("simple.test", "intS"))[("simple.test", "intS")]
-    assert req.set(("simple.test", "intS", 254))
+    assert req.set(("simple.test", "intS", 254)) is None
     val1 = req.get(("simple.test", "intS"))[("simple.test", "intS")]
     sleep(1)
     assert val1 == 254
-    assert req.set(("simple.test", "intS", val))
+    assert req.set(("simple.test", "intS", val)) is None

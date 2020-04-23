@@ -11,7 +11,7 @@ from cad import cns3
 from .ado_request import AdoRequest
 from .cdev_request import CDEVRequest
 from .http_request import HttpRequest
-from .request import Callback, Entry, Metadata, Request
+from .request import Callback, Entry, Metadata, Request, MultinetError
 
 
 def is_controls_host(ip_addr=None):
@@ -102,13 +102,15 @@ class Multirequest(Request):
             results.update(res)
         return results
 
-    def set(self, *entries: Entry, **kwargs) -> bool:
-        results = True
+    def set(self, *entries: Entry, **kwargs) -> Optional[MultinetError]:
+        results = []
         entries = self._process_entries(entries)
         for type_ in entries:
             request = self._requests[type_]
-            results &= request.set(*entries[type_], **kwargs)
-        return results
+            err = request.set(*entries[type_], **kwargs)
+            if err is not None:
+                results.append(str(err))
+        return MultinetError("; ".join(results)) if results else None
 
     def cancel_async(self):
         for req in self._requests.values():
