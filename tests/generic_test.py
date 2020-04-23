@@ -11,12 +11,14 @@ from multinet.cdev_request import CDEVRequest
 from multinet.http_request import HttpRequest
 from multinet.request import Request
 
+pytest.skip("Not ready for testing", allow_module_level=True)
+
 
 @pytest.mark.parametrize(
     "req,entries",
     [
-        (AdoRequest(), [("simple.sam", "sinM", "timestampSeconds")]),
-        (HttpRequest(), [("simple.sam", "sinM", "timestampSeconds")]),
+        (AdoRequest(), [("simple.test", "sinM", "timestampSeconds")]),
+        (HttpRequest(), [("simple.test", "sinM", "timestampSeconds")]),
         (CDEVRequest(), [("simple.cdev", "doubleS")]),
     ],
 )
@@ -29,8 +31,8 @@ def test_meta(req, entries):
 @pytest.mark.parametrize(
     "req,entries",
     [
-        (AdoRequest(), [("simple.sam", "sinM", "timestampSeconds")]),
-        (HttpRequest(), [("simple.sam", "sinM", "timestampSeconds")]),
+        (AdoRequest(), [("simple.test", "sinM", "timestampSeconds")]),
+        (HttpRequest(), [("simple.test", "sinM", "timestampSeconds")]),
         (CDEVRequest(), [("simple.cdev", "doubleS")]),
     ],
 )
@@ -43,8 +45,8 @@ def test_get(req: Request, entries):
 @pytest.mark.parametrize(
     "req,entries",
     [
-        (AdoRequest(), [("simple.sam", "sinM")]),
-        (HttpRequest(), [("simple.sam", "sinM")]),
+        (AdoRequest(), [("simple.test", "sinM")]),
+        (HttpRequest(), [("simple.test", "sinM")]),
         (CDEVRequest(), [("simple.cdev", "sinM")]),
     ],
 )
@@ -71,8 +73,8 @@ def test_get_async(req: Request, entries):
 @pytest.mark.parametrize(
     "req,entries,set_vals",
     [
-        (AdoRequest(), [("simple.sam", "intS")], [1, 2, 2, 3, 4]),
-        (HttpRequest(), [("simple.sam", "intS")], [1, 2, 2, 3, 4]),
+        (AdoRequest(), [("simple.test", "intS")], [1, 2, 2, 3, 4]),
+        (HttpRequest(), [("simple.test", "intS")], [1, 2, 2, 3, 4]),
         (CDEVRequest(), [("simple.cdev", "doubleS")], [1, 2, 2, 3, 4]),
     ],
 )
@@ -112,8 +114,8 @@ def test_get_async_filter(req: Request, entries, set_vals):
 @pytest.mark.parametrize(
     "req,entries",
     [
-        (AdoRequest(), [("simple.sam", "intS", randint(0, 255))]),
-        (HttpRequest(), [("simple.sam", "intS", randint(0, 255))]),
+        (AdoRequest(), [("simple.test", "intS", randint(0, 255))]),
+        (HttpRequest(), [("simple.test", "intS", randint(0, 255))]),
         (CDEVRequest(), [("simple.cdev", "doubleS", float(randint(0, 255)))]),
     ],
 )

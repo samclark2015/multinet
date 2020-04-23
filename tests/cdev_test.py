@@ -3,6 +3,8 @@ from multinet.cdev_request import CDEVRequest
 import logging
 from threading import Condition
 
+pytest.skip("Not ready for testing", allow_module_level=True)
+
 
 @pytest.fixture(scope="module")
 def req():
@@ -10,7 +12,6 @@ def req():
 
 
 def test_get_async(req):
-
     keys = [("simple.cdev", "doubleS")]
     counter = 0
     condition = Condition()

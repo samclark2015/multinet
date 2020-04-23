@@ -16,7 +16,10 @@ def req():
 
 @pytest.mark.parametrize(
     "entries",
-    [([("simple.sam", "sinM", "timestampSeconds")]), ([("simple.cdev", "doubleS")]),],
+    [
+        ([("simple.test", "sinM", "timestampSeconds")]),
+        # ([("simple.cdev", "doubleS")]),
+    ],
 )
 def test_meta(req: Multirequest, entries):
     meta = req.get_meta(*entries)
@@ -25,8 +28,7 @@ def test_meta(req: Multirequest, entries):
 
 
 @pytest.mark.parametrize(
-    "entries",
-    [([("simple.sam", "sinM", "timestampSeconds")]), ([("simple.cdev", "doubleS")]),],
+    "entries", [([("simple.test", "sinM")]),],  # ([("simple.cdev", "doubleS")]),
 )
 def test_get(req: Request, entries):
     data = req.get(*entries)
@@ -35,7 +37,11 @@ def test_get(req: Request, entries):
 
 
 @pytest.mark.parametrize(
-    "entries", [([("simple.sam", "sinM")]), ([("simple.cdev", "sinM")]),],
+    "entries",
+    [
+        ([("simple.test", "sinM")]),
+        # ([("simple.cdev", "sinM")]),
+    ],
 )
 def test_get_async(req: Request, entries):
     counter = 0
@@ -57,11 +63,12 @@ def test_get_async(req: Request, entries):
     assert counter > 0
 
 
+@pytest.mark.skip(reason="Filters tested externally")
 @pytest.mark.parametrize(
     "entries,set_vals",
     [
-        ([("simple.sam", "intS")], [1, 2, 2, 3, 4]),
-        ([("simple.cdev", "doubleS")], [1, 2, 2, 3, 4]),
+        ([("simple.test", "intS")], [1, 2, 2, 3, 4]),
+        # ([("simple.cdev", "doubleS")], [1, 2, 2, 3, 4]),
     ],
 )
 def test_get_async_filter(req: Request, entries, set_vals):
@@ -100,15 +107,15 @@ def test_get_async_filter(req: Request, entries, set_vals):
 @pytest.mark.parametrize(
     "entries",
     [
-        ([("simple.sam", "intS", randint(0, 255))]),
-        ([("simple.cdev", "doubleS", float(randint(0, 255)))]),
+        ([("simple.test", "intS", randint(0, 255))]),
+        # ([("simple.cdev", "doubleS", float(randint(0, 255)))]),
     ],
 )
 def test_set(req: Request, entries):
     for entry in entries:
         val = req.get(entry[:2])[entry[:2]]
-        assert req.set(entry)
+        assert req.set(entry) is None
         val1 = req.get(entry[:2])[entry[:2]]
         assert val1 == entry[2]
         sleep(0.5)
-        assert req.set((*entry[:2], val))
+        assert req.set((*entry[:2], val)) is None

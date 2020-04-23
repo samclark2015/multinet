@@ -4,9 +4,9 @@ from random import randint
 
 def get_fake_data():
     return {
-        ("simple.sam", "intS"): randint(0, 100),
-        ("simple.sam", "intS", "timestampNanoSeconds"): randint(1000, 5000),
-        ("simple.sam", "intS", "timestampSeconds"): randint(0, 1000),
+        ("simple.test", "intS"): randint(0, 100),
+        ("simple.test", "intS", "timestampNanoSeconds"): randint(1000, 5000),
+        ("simple.test", "intS", "timestampSeconds"): randint(0, 1000),
     }
 
 
