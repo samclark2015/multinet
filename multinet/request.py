@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import *
 import logging
+from cad_io.cns import getErrorString
 
 Entry = tuple
 Metadata = Dict[str, Any]
@@ -9,8 +10,9 @@ Filter = Callable[[Dict[Entry, Any], int], Dict[Entry, Any]]
 
 
 class MultinetError(Exception):
-    pass
-
+    def __init__(self, err):
+        err_string = getErrorString(err) if isinstance(err, int) else err
+        super().__init__(err_string)
 
 class Request(ABC):
     """Request interface"""
@@ -35,7 +37,7 @@ class Request(ABC):
     @abstractmethod
     def get_async(
         self, callback: Callback, *entries: Entry, immediate=False, ppm_user=1, **kwargs
-    ) -> None:
+    ) -> Dict[Entry, MultinetError]:
         """Get data from device asynchronously
         
         Arguments:
@@ -62,7 +64,7 @@ class Request(ABC):
         ...
 
     @abstractmethod
-    def set(self, *entries: Entry, ppm_user=1, **kwargs) -> Optional[MultinetError]:
+    def set(self, *entries: Entry, ppm_user=1, **kwargs) -> Dict[Entry, MultinetError]:
         """Set data
         
         Arguments:

@@ -75,25 +75,24 @@ class HttpRequest(Request):
                 r.status_code,
                 error,
             )
-            raise ValueError(error)
+            data = {entry: MultinetError(error) for entry in entries}
         else:
             for entry in r.json():
                 device = entry["device"]
                 others = entry["property"].split(":")
                 key: Entry = (device, *others)  # type: ignore
-                if "value" not in entry:
-                    warnings.warn(f"Unable to get {key}; {entry['error']}")
-                    continue
-                value = entry["value"]
-                type_ = entry["type"]
-                value = self._convert_value(value, type_)
-                data[key] = value
-                if timestamp and "timestamp" in entry:
-                    data[(*key[:2], "timestamp")] = entry["timestamp"]
-
+                if "error" in entry:
+                    data[key] = MultinetError(entry["error"])
+                else:
+                    value = entry["value"]
+                    type_ = entry["type"]
+                    value = self._convert_value(value, type_)
+                    data[key] = value
+                    if timestamp and "timestamp" in entry:
+                        data[(*key[:2], "timestamp")] = entry["timestamp"]
         return data
 
-    def set(self, *entries: Entry, ppm_user=1, **kwargs) -> Optional[MultinetError]:
+    def set(self, *entries: Entry, ppm_user=1, **kwargs) -> Dict[Entry, MultinetError]:
         context = self._get_context()
         names, props, values = self._unpack_args(*entries, is_set=True)
         payload = {
@@ -108,16 +107,16 @@ class HttpRequest(Request):
         self.logger.debug("PUT %s <%s>: %s", url, headers, payload)
         try:
             r = requests.put(url, params=payload, headers=headers)
+            data = {}
         except requests.exceptions.RequestException as exc:
-            self.logger.error("Exception: %s", exc)
-            return MultinetError(exc)
+            data = {entry: MultinetError(exc) for entry in entries}
         if r.status_code != requests.codes.ok:  # pylint: disable=no-member
             error = r.headers.get("CAD-Error")
             self.logger.error(
                 "Failed to set value - HTTP Error %d, data: %s", r.status_code, error
             )
-            return MultinetError(error)
-        return None
+            data = {entry: MultinetError(error) for entry in entries}
+        return data
 
     def cancel_async(self):
         self._cancel_async = True
@@ -130,7 +129,7 @@ class HttpRequest(Request):
         immediate=False,
         timestamp=True,
         **kwargs,
-    ) -> None:
+    ) -> Dict[Entry, MultinetError]:
         """ Asynchronous get. 
         The user defined function callback(*args) will be called 
         when any parameter in the list have been changed.       
@@ -140,7 +139,11 @@ class HttpRequest(Request):
         url = HTTP_SERVER + "/DeviceServer/api/device/list/async"
         r = requests.get(url, params=payload)
         if r.status_code != requests.codes.ok:  # pylint: disable=no-member
-            return None
+            error = r.headers.get("CAD-Error")
+            self.logger.error(
+                "Failed to start async - HTTP Error %d, data: %s", r.status_code, error
+            )
+            return {entry: MultinetError(error) for entry in entries}
         rid = (
             r.text
         )  # subscription ID, should be used in subsequent polling for result.
@@ -148,6 +151,7 @@ class HttpRequest(Request):
         self._cancel_async = False
         thread = threading.Thread(target=self._async_thread, args=(rid, immediate))
         thread.start()
+        return {}
 
     def _async_thread(self, rid, immediate):
         # internal thread function. It polls for http results and

@@ -27,7 +27,7 @@ class AdoRequest(Request):
         timestamp=True,
         immediate=False,
         **kwargs,
-    ) -> None:
+    ) -> Dict[Entry, MultinetError]:
         """
         Get ADO parameters synchronously
         :param callback: Callable object taking arguments device, param, data, ppm_user
@@ -54,21 +54,22 @@ class AdoRequest(Request):
             self.async_receiver.newdata()
             self.async_thread = threading.Thread(target=self._get_async_thread)
             self.async_thread.start()
+            self.logger.debug("receiver_thread started")
 
         self.logger.debug("request_list: %s", request_list)
+        errors = {}
         for group in request_list:
             self._async_keymap.update({v: k for k, v in group.items()})
             values = group.values()
             status, tid = cns.adoGetAsync(
                 list=(list(values), self.async_receiver), ppmIndex=ppm_user - 1
             )
-            self.callbacks[tid] = (callback, group.keys())
-            self.logger.debug("adoGetAsync status, tid: %s", (status, tid))
-            if status:
-                self.logger.error(
-                    "adoGetAsync: %s, failed for %s", status, request_list
-                )
-            self.logger.debug("receiver_thread started, tid: %d", tid)
+            self.logger.debug("adoGetAsync status: %d, tid: %d", status, tid)
+            if status == 0:
+                self.callbacks[tid] = (callback, group.keys())
+            else:
+                errors.update({ent: MultinetError(status) for ent in group.keys()})
+        return errors
 
     def get(
         self, *entries: Entry, ppm_user=1, timestamp=True, **kwargs
@@ -97,15 +98,27 @@ class AdoRequest(Request):
             for group in request_list:
                 keys, values = group.keys(), group.values()
                 group_return, err = cns.adoGet(list=list(values), ppmIndex=ppm_user - 1)
+                print(group_return, err)
                 if err == 0:
-                    group_results = dict(
-                        zip(
-                            keys,
-                            [v[0] if len(v) == 1 else list(v) for v in group_return],
-                        )
-                    )
+                    good_keys = keys
+                    bad_keys = {}
                 else:
-                    group_results = {key: MultinetError(err) for key in keys}
+                    key_list = list(keys)
+                    good_keys = [
+                        key_list[idx] for idx, code in enumerate(err) if code == 0
+                    ]
+                    bad_keys = {
+                        key_list[idx]: MultinetError(code)
+                        for idx, code in enumerate(err)
+                        if code != 0
+                    }
+                group_results = dict(
+                    zip(
+                        good_keys,
+                        [v[0] if len(v) == 1 else list(v) for v in group_return],
+                    )
+                )
+                group_results.update(bad_keys)
                 group_results = self._convert_ts(keys, group_results)
                 rval.update(group_results)
         except IndexError:
@@ -134,15 +147,18 @@ class AdoRequest(Request):
             ado_handle = list(group.values())[0][0]
             meta = cns.adoMetaData(ado_handle)
             for entry in group.keys():
-                if len(entry) == 1:
-                    response[entry] = meta
-                if len(entry) == 2:
-                    response[entry] = meta[(entry[1], "value")]._asdict()
-                elif len(entry) == 3:
-                    response[entry] = meta[(entry[1], entry[2])]._asdict()
+                try:
+                    if len(entry) == 1:
+                        response[entry] = meta
+                    if len(entry) == 2:
+                        response[entry] = meta[(entry[1], "value")]._asdict()
+                    elif len(entry) == 3:
+                        response[entry] = meta[(entry[1], entry[2])]._asdict()
+                except KeyError:
+                    response[entry] = MultinetError("Metadata not available")
         return response
 
-    def set(self, *entries: Entry, ppm_user=1, **kwargs) -> Optional[MultinetError]:
+    def set(self, *entries: Entry, ppm_user=1, **kwargs) -> Dict[Entry, MultinetError]:
         """
         Synchronously set ADO parameters
         :param args: One or more tuple(<ado_name>, <parameter_name>, [property_name], <value>); property_name defaults to 'value'
@@ -155,17 +171,17 @@ class AdoRequest(Request):
             *entries, timestamp_required=False, is_set=True
         )
         self.logger.debug("request_list: %s", request_list)
-        if len(request_list) == 0:
-            self.logger.error("Request not created")
-            return MultinetError("Error creating request")
         # v17#with self.pyadoLock:
-        errors = []
+        errors = {}
         for group in request_list:
             vals = list(group.values())
-            err_code = cns.adoSet(list=vals, ppmIndex=ppm_user - 1)
+            try:
+                err_code = cns.adoSet(list=vals, ppmIndex=ppm_user - 1)
+            except (TypeError, ValueError) as exc:
+                err_code = str(exc)
             if err_code != 0:
-                errors.append(f"Error setting {group}: {err_code}")
-        return MultinetError("; ".join(errors)) if errors else None
+                errors.update({ent: MultinetError(err_code) for ent in group})
+        return errors
 
     def cancel_async(self):
         self._async_keymap.clear()
@@ -188,14 +204,13 @@ class AdoRequest(Request):
     def _convert_ts(entries, data):
         for entry in entries:
             if entry in data and (*entry[:2], "timestampSeconds") in data:
-                ts = float(data[(*entry[:2], "timestampSeconds")])
-                if (*entry[:2], "timestampNanoSeconds") in data:
-                    ts += data[(*entry[:2], "timestampNanoSeconds")] / 1e9
-                del (
-                    data[(*entry[:2], "timestampNanoSeconds")],
-                    data[(*entry[:2], "timestampSeconds")],
-                )
-                data[(*entry[:2], "timestamp")] = ts
+                try:
+                    ts = float(data[(*entry[:2], "timestampSeconds")])
+                    if (*entry[:2], "timestampNanoSeconds") in data:
+                        ts += data[(*entry[:2], "timestampNanoSeconds")] / 1e9
+                    data[(*entry[:2], "timestamp")] = ts
+                except TypeError:
+                    continue
         return data
 
     def _unpack_args(
@@ -210,38 +225,43 @@ class AdoRequest(Request):
             if not ado_handle:
                 break
             for entry in group_entries:
-                param_name = entry[1]
-                prop_name = (
-                    entry[2]
-                    if len(entry) == 4 and is_set or len(entry) == 3 and not is_set
-                    else "value"
-                )
-                if is_set:
-                    value = entry[-1]
-                    try:
-                        group_requests[entry] = (
-                            ado_handle,
-                            param_name,
-                            prop_name,
-                            value,
-                        )
-                    except IndexError:
-                        self.logger.error(
-                            "Set value missing for %s", str(entry),
-                        )
-                        return []
+                if len(entry) == 1:
+                    group_requests[entry] = (ado_handle,)
                 else:
-                    if timestamp_required:
-                        group_requests[(ado_name, param_name, "timestampSeconds")] = (
-                            ado_handle,
-                            param_name,
-                            "timestampSeconds",
-                        )
-                        group_requests[
-                            (ado_name, param_name, "timestampNanoSeconds")
-                        ] = (ado_handle, param_name, "timestampNanoSeconds")
+                    param_name = entry[1]
+                    prop_name = (
+                        entry[2]
+                        if len(entry) == 4 and is_set or len(entry) == 3 and not is_set
+                        else "value"
+                    )
+                    if is_set:
+                        value = entry[-1]
+                        try:
+                            group_requests[entry] = (
+                                ado_handle,
+                                param_name,
+                                prop_name,
+                                value,
+                            )
+                        except IndexError:
+                            self.logger.error(
+                                "Set value missing for %s", str(entry),
+                            )
+                            return []
+                    else:
+                        if timestamp_required:
+                            group_requests[
+                                (ado_name, param_name, "timestampSeconds")
+                            ] = (
+                                ado_handle,
+                                param_name,
+                                "timestampSeconds",
+                            )
+                            group_requests[
+                                (ado_name, param_name, "timestampNanoSeconds")
+                            ] = (ado_handle, param_name, "timestampNanoSeconds")
 
-                    group_requests[entry] = (ado_handle, param_name, prop_name)
+                        group_requests[entry] = (ado_handle, param_name, prop_name)
             request_list.append(group_requests)
         return request_list
 

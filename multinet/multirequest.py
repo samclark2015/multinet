@@ -59,19 +59,22 @@ class Multirequest(Request):
         }
 
     def get(self, *entries: Entry, **kwargs) -> Dict[Entry, Any]:
-        results = dict()
-        entries = self._process_entries(entries)
+        entries, results = self._process_entries(entries)
         for type_ in entries:
             request = self._requests[type_]
             res = request.get(*entries[type_], **kwargs)
             results.update(res)
         return results
 
-    def get_async(self, callback: Callback, *entries: Entry, **kwargs) -> None:
-        entries = self._process_entries(entries)
+    def get_async(
+        self, callback: Callback, *entries: Entry, **kwargs
+    ) -> Dict[Entry, MultinetError]:
+        entries, errors = self._process_entries(entries)
         for type_ in entries:
             request = self._requests[type_]
-            request.get_async(callback, *entries[type_], **kwargs)
+            err = request.get_async(callback, *entries[type_], **kwargs)
+            errors.update(err)
+        return errors
 
     # def async_handler(self, *entries, ppm_user: Union[int, List[int]] = 1):
     #     def callback(func: Callback, data: Dict[Entry, Any], ppm_user: int):
@@ -93,24 +96,24 @@ class Multirequest(Request):
 
     #     return wrapper
 
-    def get_meta(self, *entries, **kwargs) -> Dict[Entry, Metadata]:
-        results = dict()
-        entries = self._process_entries(entries)
+    def get_meta(
+        self, *entries, **kwargs
+    ) -> Dict[Entry, Union[Metadata, MultinetError]]:
+        entries, results = self._process_entries(entries)
         for type_ in entries:
             request = self._requests[type_]
             res = request.get_meta(*entries[type_], **kwargs)
             results.update(res)
         return results
 
-    def set(self, *entries: Entry, **kwargs) -> Optional[MultinetError]:
-        results = []
-        entries = self._process_entries(entries)
+    def set(self, *entries: Entry, **kwargs) -> Dict[Entry, MultinetError]:
+        entries, errors = self._process_entries(entries)
         for type_ in entries:
             request = self._requests[type_]
             err = request.set(*entries[type_], **kwargs)
             if err is not None:
-                results.append(str(err))
-        return MultinetError("; ".join(results)) if results else None
+                errors.update(err)
+        return errors
 
     def cancel_async(self):
         for req in self._requests.values():
@@ -119,15 +122,21 @@ class Multirequest(Request):
     @classmethod
     def _process_entries(cls, entries):
         results = defaultdict(list)
-
+        errors: Dict[str, MultinetError] = {}
         for entry in entries:
             device = entry[0]
             if device in cls._types:
                 type_ = cls._types[device]
             else:
                 cns_entry = cns3.cnslookup(device)
-                type_ = EntryType.get_type(cns_entry.type)
-                cls._types[device] = type_
-            logging.debug("Using %s for %s", type_, entry)
-            results[type_].append(entry)
-        return results
+                if cns_entry is None:
+                    type_ = None
+                else:
+                    type_ = EntryType.get_type(cns_entry.type)
+                    cls._types[device] = type_
+            if type_ is None:
+                errors[entry] = MultinetError("CNS lookup failed")
+            else:
+                logging.debug("Using %s for %s", type_, entry)
+                results[type_].append(entry)
+        return results, errors
