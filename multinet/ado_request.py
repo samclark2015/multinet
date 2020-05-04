@@ -99,7 +99,6 @@ class AdoRequest(Request):
             for group in request_list:
                 keys, values = group.keys(), group.values()
                 group_return, err = cns.adoGet(list=list(values), ppmIndex=ppm_user - 1)
-                print(group_return, err)
                 if err == 0:
                     good_keys = keys
                     bad_keys = {}
