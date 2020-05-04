@@ -114,8 +114,8 @@ def test_get_async_filter(req: Request, entries, set_vals):
 def test_set(req: Request, entries):
     for entry in entries:
         val = req.get(entry[:2])[entry[:2]]
-        assert req.set(entry) is None
+        assert not req.set(entry)
         val1 = req.get(entry[:2])[entry[:2]]
         assert val1 == entry[2]
         sleep(0.5)
-        assert req.set((*entry[:2], val)) is None
+        assert not req.set((*entry[:2], val))

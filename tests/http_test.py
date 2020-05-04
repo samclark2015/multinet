@@ -17,7 +17,7 @@ def pyado2():
 
 def test_set(req: HttpRequest, pyado2: IORequest):
     res = req.set(("simple.test", "intS", 7))
-    assert res is None, "HTTP Request failed"
+    assert not res, "HTTP Request failed"
     assert (
         pyado2.get(("simple.test", "intS"))["simple.test:intS"]["value"] == 7
     ), "Value mismatch with pyado2"
@@ -29,7 +29,7 @@ def test_multiset(req: HttpRequest, pyado2: IORequest):
         ("simple.test", "floatS", 3.14),
         ("simple.test", "stringS", "Hello"),
     )
-    assert res is None, "HTTP Request failed"
+    assert not res, "HTTP Request failed"
     assert (
         pyado2.get(("simple.test", "intS"))["simple.test:intS"]["value"] == 7
     ), "Value mismatch with pyado2"
