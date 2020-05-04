@@ -5,7 +5,7 @@ from operator import itemgetter
 from threading import Lock
 from typing import *
 
-from cad_io import cns
+from cad_io import cns3 as cns
 from cad_io.cdev import tags
 from cad_io.cdev.clip import ClipConnection, ClipData, ClipPacket
 

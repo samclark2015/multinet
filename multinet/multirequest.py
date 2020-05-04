@@ -22,9 +22,9 @@ def is_controls_host(ip_addr=None):
         except:  # pylint: disable=bare-except
             warnings.warn("Unable to get Hostname and IP")
             return False
-    return ip_address(ip_addr) in ip_network("130.199.104.0/23") or ip_address(
+    return ip_address(ip_addr) in ip_network("130.199.104.0/22") or ip_address(
         ip_addr
-    ) in ip_network("130.199.108.0/23")
+    ) in ip_network("130.199.108.0/22")
 
 
 class EntryType(Enum):

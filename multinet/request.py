@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import *
 import logging
-from cad_io.cns import getErrorString
+from cad_io.cns3 import getErrorString
 
 Entry = tuple
 Metadata = Dict[str, Any]
@@ -13,6 +13,7 @@ class MultinetError(Exception):
     def __init__(self, err):
         err_string = getErrorString(err) if isinstance(err, int) else err
         super().__init__(err_string)
+
 
 class Request(ABC):
     """Request interface"""
