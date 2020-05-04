@@ -6,8 +6,7 @@ The Multinet package provides Python developers a protocol-agnostic toolkit to a
 
 ## Installation
 
-To install with a virtual environment, run:
-`pip install multinet`
+To install into an active virtual environment, add `multinet` to your production.in file and run `cadpip switch p`.
 
 ## Usage
 

@@ -29,11 +29,12 @@ class AdoRequest(Request):
         **kwargs,
     ) -> Dict[Entry, MultinetError]:
         """
-        Get ADO parameters synchronously
-        :param callback: Callable object taking arguments device, param, data, ppm_user
+        Get ADO parameters asynchronously
+        :param callback: Callable object taking arguments results_dict, ppm_user
         :param args: One or more tuple(<ado_name>, <parameter_name>, [property_name]); property_name defaults to 'value'
-        :param timestamp: boolean; should timestamps be included (default True)
         :param ppm_user: int; PPM User 1 - 8 (default 1)
+        :param timestamp: boolean; should timestamps be included (default True)
+        :param immediate: boolean; should an initial get be performed immediately (default False)
         :return: dict
         """
         if not callable(callback):
