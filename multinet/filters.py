@@ -2,6 +2,10 @@ from cad_io.cdev import tags
 
 
 class AnyChange:
+    """Filter for async requests  
+    
+    Filters out all values except those which have changed
+    """
     def __init__(self):
         self.old_data: dict = {}
 
@@ -11,7 +15,8 @@ class AnyChange:
         keys = [
             key
             for key in data.keys()
-            if len(key) < 3 or key[2]
+            if len(key) < 3
+            or key[2]
             not in (
                 tags.key_to_tag(tags.TIMESTAMP),
                 tags.key_to_tag(tags.TIMESTAMPSECONDS_TAG),

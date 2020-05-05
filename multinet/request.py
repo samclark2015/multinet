@@ -28,10 +28,10 @@ class Request(ABC):
         """Get data from device synchronously
         
         Arguments:
-            *entries {Entry} -- Entries, in form of (<device>, <param>, <prop>)
+            *entries (Entry): Entries, in form of (<device>, <param>, <prop>)
         
         Returns:
-            Dict[Entry, Any] -- Dictionary of return values
+            Dict[Entry, Any]: Dictionary of return values
         """
         ...
 
@@ -42,11 +42,11 @@ class Request(ABC):
         """Get data from device asynchronously
         
         Arguments:
-            callback {Callable[[Dict[Entry, Any]], None]} -- callback with arguments <data>, <ppm_user>
-            *entries {Entry} -- Entries, in form of (<device>, <param>, <prop>)
+            callback (Callable[[Dict[Entry, Any]], None]): callback with arguments <data>, <ppm_user>
+            *entries (Entry): Entries, in form of (<device>, <param>, <prop>)
         
         Keyword Arguments:
-            immediate {bool} -- should callback be called immediately after get_async (default: False)
+            immediate (bool): should callback be called immediately after get_async (default: False)
         """
         ...
 
@@ -57,22 +57,22 @@ class Request(ABC):
         """Get metadata for entries
 
         Arguments:
-            *entries {Entry} -- Entries, in form of (<device>, <param>, <prop>)
-        
+            *entries (Entry): Entries, in form of (<device>, <param>, <prop>)
+
         Returns:
-            Dict[Entry, Metadata] -- Metadata values
+            Dict[Entry, Metadata]: Metadata values
         """
         ...
 
     @abstractmethod
     def set(self, *entries: Entry, ppm_user=1, **kwargs) -> Dict[Entry, MultinetError]:
         """Set data
-        
+
         Arguments:
-            *entries {Entry} -- Entries, in form of (<device>, <param>, <prop>)
-        
+            *entries (Entry): Entries, in form of (<device>, <param>, <prop>)  
+
         Returns:
-            bool -- did set succeed
+            bool: did set succeed
         """
         ...
 
@@ -85,7 +85,7 @@ class Request(ABC):
         """Add filter for asynchronous requests
         
         Arguments:
-            filter_ {Filter} -- filter function
+            filter_ (Filter): filter function
         """
         self._filters.append(filter_)
 

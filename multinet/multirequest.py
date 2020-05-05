@@ -6,7 +6,7 @@ from collections import defaultdict
 from enum import Enum
 from typing import *
 
-from cad import cns3
+from cad_io import cns3
 
 from .ado_request import AdoRequest
 from .cdev_request import CDEVRequest

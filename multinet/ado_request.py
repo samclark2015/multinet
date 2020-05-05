@@ -30,12 +30,16 @@ class AdoRequest(Request):
     ) -> Dict[Entry, MultinetError]:
         """
         Get ADO parameters asynchronously
-        :param callback: Callable object taking arguments results_dict, ppm_user
-        :param args: One or more tuple(<ado_name>, <parameter_name>, [property_name]); property_name defaults to 'value'
-        :param ppm_user: int; PPM User 1 - 8 (default 1)
-        :param timestamp: boolean; should timestamps be included (default True)
-        :param immediate: boolean; should an initial get be performed immediately (default False)
-        :return: dict
+
+        Arguments:
+        	callback: Callable object taking arguments results_dict, ppm_user
+        	args: One or more tuple(<ado_name>, <parameter_name>, [property_name]); property_name defaults to 'value'
+        	ppm_user: int; PPM User 1 - 8 (default 1)
+        	timestamp: boolean; should timestamps be included (default True)
+        	immediate: boolean; should an initial get be performed immediately (default False)
+
+        Returns: 
+            dict: Any errors (empty means success)
         """
         if not callable(callback):
             raise ValueError("Callback must be callable")
@@ -77,10 +81,14 @@ class AdoRequest(Request):
     ) -> Dict[Entry, Any]:
         """
         Get ADO parameters synchronously
-        :param args: One or more tuple(<ado_name>, <parameter_name>, [property_name]); property_name defaults to 'value'
-        :param timestamp: boolean; should timestamps be included (default True)
-        :param ppm_user: int; PPM User 1 - 8 (default 1)
-        :return: dict
+
+        Arguments:
+        	args: One or more tuple(<ado_name>, <parameter_name>, [property_name]); property_name defaults to 'value'
+        	timestamp: boolean; should timestamps be included (default True)
+        	ppm_user: int; PPM User 1 - 8 (default 1)
+        
+        Returns: 
+            Dict[Entry, Any]: values from ADO, MultinetError if errors
         """
         self.logger.debug("get(%s)", entries)
         request_list = self._unpack_args(*entries, timestamp_required=timestamp)
@@ -135,10 +143,14 @@ class AdoRequest(Request):
     ) -> Dict[Entry, Union[Metadata, MultinetError]]:
         """
         Get metadata for ado
-        :param ado: Name of ADO; returns list of parameters
-        :param param: Name of parameter (optional); returns list of properties & values
-        :param all: Returns dict of all parameters, properties, and values (optional)
-        :return: list or dict
+
+        Arguments:
+        	ado: Name of ADO; returns list of parameters
+        	param: Name of parameter (optional); returns list of properties & values
+        	all: Returns dict of all parameters, properties, and values (optional)
+
+        Returns: 
+            Dict[Entry, Union[MetaData, MultinetError]]: metadata from ADO
         """
         # first argument is always ADO
         response = {}
@@ -161,9 +173,13 @@ class AdoRequest(Request):
     def set(self, *entries: Entry, ppm_user=1, **kwargs) -> Dict[Entry, MultinetError]:
         """
         Synchronously set ADO parameters
-        :param args: One or more tuple(<ado_name>, <parameter_name>, [property_name], <value>); property_name defaults to 'value'
-        :param ppm_user: int; PPM User 1 - 8 (default 1)
-        :return: True if successful
+
+        Arguments:
+        	args: One or more tuple(<ado_name>, <parameter_name>, [property_name], <value>); property_name defaults to 'value'
+        	ppm_user (int): PPM User 1 - 8 (default 1)
+            
+        Returns: 
+            bool: True if successful
         """
         if ppm_user < 1 or ppm_user > 8:
             raise MultinetError("PPM User must be 1 - 8")

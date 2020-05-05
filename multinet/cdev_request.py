@@ -18,7 +18,7 @@ class CDEVRequest(Request):
     def __init__(self):
         """
         Arguments:
-        server: str -- name of server to call
+        	server (str): name of server to call
         """
         super().__init__()
         self._trans_idx_lock = Lock()
@@ -86,11 +86,11 @@ class CDEVRequest(Request):
         Send a message
 
         Arguments:
-        message: str -- message to send to server
+        	message (str): message to send to server
 
         Keyword arguments:
-        request_data: dict -- request data to send with message
-        device: Union[str, List[str]] -- device or list of devices to send message
+        	request_data (dict): request data to send with message
+            device (Union[str, List[str]]): device or list of devices to send message
         """
         with ClipConnection(server) as conn:
             resp = self._send(conn, message, request_data, context, device)
@@ -103,8 +103,8 @@ class CDEVRequest(Request):
         Get property from device
 
         Arguments:
-        device: str -- device or list of devices on which to retrieve the property
-        prop: str -- property to fetch
+        	device (str): device or list of devices on which to retrieve the property
+        	prop (str): property to fetch
         """
         entries = self._unpack_entries(*entries)
         responses = dict()
@@ -144,9 +144,9 @@ class CDEVRequest(Request):
         Set value of property on device
 
         Arguments:
-        device: str -- device or list of devices on which to retrieve the property
-        prop: str -- property to fetch
-        val: any -- new value of property
+        	device (str): device or list of devices on which to retrieve the property
+        	prop (str): property to fetch
+        	val (any): new value of property
         """
         entries = self._unpack_entries(*entries, is_set=True)
         errors = []
@@ -191,12 +191,12 @@ class CDEVRequest(Request):
         Registers async handler and requests updates from server
 
         Arguments:
-        device: str -- device or list of devices on which to retrieve the property
-        prop: str -- property to fetch
-        callback: callable -- method or function to call on receipt of data
+        	device (str): device or list of devices on which to retrieve the property
+        	prop (str): property to fetch
+        	callback (callable): method or function to call on receipt of data
 
         Returns:
-        idx: int -- transaction index (pass to cancel_async method)
+        	idx (int): transaction index (pass to cancel_async method)
         """
         entries = self._unpack_entries(*entries)
         for server, entries in entries.items():
