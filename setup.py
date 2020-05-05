@@ -14,3 +14,4 @@ setup(
     install_requires=dependencies,
     setup_requires=["setuptools_scm"],
 )
+
