@@ -1,0 +1,34 @@
+#!/bin/bash
+
+# Put this check in here just in case the developer updates a .in file, but
+# never compiles the corresponding .txt file
+
+if [ -f "$(git rev-parse --show-toplevel)/.black-on-commit" ]; then
+    FILES=$(git diff --cached --name-only | grep -E '\.(py)$')
+	if [ ! -z "$FILES" ]; then
+		python3 -m black $FILES
+		git add $FILES
+	fi
+fi
+
+RETURN_VAL=true
+
+NAMES="development production"
+
+for name in $NAMES
+do
+    cp requirements/$name.txt requirements/temp
+    venv/bin/python -m piptools compile -q --output-file requirements/$name.txt requirements/$name.in
+    diff requirements/temp requirements/$name.txt > /dev/null
+    if [ $? -ne 0 ]
+    then
+        git add requirements/$name.txt
+        echo "requirements/$name.txt was not up-to-date!"
+        echo "Re-run commit; it has been updated automatically."
+        RETURN_VAL=false
+    fi
+    rm requirements/temp
+done
+
+$RETURN_VAL
+
