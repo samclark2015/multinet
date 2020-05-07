@@ -253,7 +253,7 @@ class AdoRequest(Request):
                     if is_set:
                         value = entry[-1]
                         try:
-                            group_requests[entry] = (
+                            group_requests[entry[:-1]] = (
                                 ado_handle,
                                 param_name,
                                 prop_name,
