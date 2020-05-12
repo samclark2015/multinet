@@ -2,7 +2,7 @@ import pytest
 from multinet.http_request import HttpRequest
 import logging
 from threading import Condition
-from cad_io.pyado2 import IORequest
+from cad_io.adoaccess import IORequest
 
 
 @pytest.fixture(scope="module")
