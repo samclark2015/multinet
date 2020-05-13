@@ -6,4 +6,4 @@
 #
 --find-links /ride/release/python/packages/
 
-cad-io==3.1.2             # via -r /cfs/ad/sclark/Documents/python/multinet/requirements/production.in
+cad-io==3.2.3             # via -r /cfs/ad/sclark/Documents/python/multinet/requirements/production.in
