@@ -1,9 +1,8 @@
-import threading
 from itertools import groupby
 from operator import itemgetter
 from functools import lru_cache
 from typing import *
-from cad_io import cns3 as cns, adoaccess
+from cad_io import adoaccess
 
 from .request import Entry, Metadata, Request, Callback, MultinetError
 
