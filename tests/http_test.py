@@ -52,7 +52,7 @@ def test_async(req: HttpRequest):
 
     req.get_async(cb, *keys)
     with condition:
-        condition.wait_for(lambda: counter >= 20)
+        condition.wait_for(lambda: counter >= 20, 10)
     req.cancel_async()
 
 

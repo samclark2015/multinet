@@ -27,5 +27,5 @@ def test_get_async(req):
 
     req.get_async(cb, *keys)
     with condition:
-        condition.wait_for(lambda: counter >= 4)
+        condition.wait_for(lambda: counter >= 4, 10)
     req.cancel_async()
