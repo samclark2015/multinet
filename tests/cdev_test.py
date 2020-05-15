@@ -18,7 +18,6 @@ def test_get_async(req):
 
     def cb(data, ppm):
         nonlocal counter
-        print(data, ppm)
         assert all(key in data for key in keys)
         counter += 1
         logging.debug("%d received", counter)

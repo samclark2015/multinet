@@ -1,7 +1,7 @@
 import pytest
 from multinet.ado_request import AdoRequest
 import logging
-from threading import Condition, Thread
+from threading import Condition, Thread, Event
 from multinet import filters
 from time import sleep
 
@@ -55,19 +55,18 @@ def test_get_async_filter(req):
     set_vals = [1, 2, 2, 3, 4]
     keys = [("simple.test", "intS")]
     counter = 0
-    set_counter = 0
     condition = Condition()
 
+    set_event = Event()
+
     def set_thread():
-        nonlocal set_counter
-        while set_counter < len(set_vals):
-            _ = [req.set((*key, set_vals[set_counter])) for key in keys]
-            set_counter += 1
+        for i in set_vals:
+            _ = [req.set((*key, i)) for key in keys]
             sleep(1.0)
+        set_event.set()
 
     def cb(data, ppm_user):
         nonlocal counter
-        print(data)
         assert all(key in data for key in keys)
         counter += 1
         logging.debug("%d received", counter)
@@ -77,12 +76,11 @@ def test_get_async_filter(req):
     req.add_filter(filters.AnyChange())
     req.get_async(cb, *keys)
     Thread(target=set_thread).start()
+    set_event.wait(timeout=len(set_vals) + 1)
     with condition:
-        condition.wait_for(lambda: counter >= 4 or set_counter >= len(set_vals), 10)
+        condition.wait_for(lambda: counter >= len(set(set_vals)), timeout=10)
     req.cancel_async()
-    assert (
-        set_counter == len(set_vals) and counter == 4
-    ), f"{set_counter} sets; {counter} received"
+    assert counter == len(set(set_vals)), f"{counter} received"
 
 
 def test_get_entries_list(req):

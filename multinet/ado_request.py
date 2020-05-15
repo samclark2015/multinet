@@ -73,7 +73,9 @@ class AdoRequest(Request):
             ppm_user = data["ppmuser"] + 1
             del data["ppmuser"]
             data = self.transform_data(entries, data)
-            cb(data, ppm_user)
+            data = self._filter_data(data, ppm_user)
+            if data:
+                cb(data, ppm_user)
 
         errs = {}
         for entry in entries:
