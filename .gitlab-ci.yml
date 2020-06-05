@@ -5,55 +5,6 @@ stages:
 
 variables:
   PYTHON_VERSION: python3
+  PACKAGE_NAME: multinet
 
-before_script:
-  - source ~gitlab-runner/.bashrc
-  - $PYTHON_VERSION -m venv --system-site-packages venv
-  - source venv/bin/activate
-
-cache: 
-  paths:
-    - .cache/pip
-    - venv/
-
-# if pytest succeeds or no tests are run, continue to deploy
-pytest:
-  only:
-    - tags
-  stage: test
-  variables:
-    DO_TESTS: 1
-  script:
-    - printf -v BOILER_TEST 'def test_dummy():\n    assert True'
-    - printf -v TEST_DIR_FILES ''
-    - >
-      if [ -d "tests" ]; then
-        TEST_DIR_FILES=$( ls tests )
-      fi
-    - >
-      if [ "$TEST_DIR_FILES" == "test_sample.py" ]; then
-        SAMPLE_CONTENT=$(<tests/test_sample.py)
-        if [ "$SAMPLE_CONTENT" == "$BOILER_TEST" ]; then
-          DO_TESTS=0
-        fi
-      elif [ "$TEST_DIR_FILES" == "" ]; then
-        DO_TESTS=0
-      fi
-    - >
-      if [ $DO_TESTS -eq 1 ]; then
-        $PYTHON_VERSION -m pip install -r requirements/production.txt
-        $PYTHON_VERSION -m pytest tests ; ret=$? ; [ $ret -eq 0 ] || [ $ret -eq 5 ]
-      fi
-
-release:
-  only:
-    - tags
-  stage: deploy
-  variables:
-    PACKAGE_NAME: multinet
-    REL_ROOT: /ride/release/python/packages
-  environment:
-    name: release
-  script:
-    - ./setup.py sdist --dist-dir $REL_ROOT
-
+include: 'https://gitlab.pbn.bnl.gov/sclark/ci-templates/-/raw/master/python-project.yml'
