@@ -241,6 +241,9 @@ class CDEVRequest(Request):
                 )
             conn.close()
 
+    def set_history(self, enabled):
+        pass
+
     def _unpack_entries(self, *entries, is_set=False) -> Dict[str, Dict[Entry, Entry]]:
         entries = [tuple(ent) for ent in entries]
         requests = {}

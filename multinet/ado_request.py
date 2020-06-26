@@ -2,7 +2,7 @@ from itertools import groupby
 from operator import itemgetter
 from functools import lru_cache
 from typing import *
-from cad_io import adoaccess
+from cad_io import adoaccess, cns3
 
 from .request import Entry, Metadata, Request, Callback, MultinetError
 
@@ -135,7 +135,9 @@ class AdoRequest(Request):
                     response[entry] = MultinetError("Metadata not available")
         return response
 
-    def set(self, *entries: Entry, ppm_user=1, **kwargs) -> Dict[Entry, MultinetError]:
+    def set(
+        self, *entries: Entry, ppm_user=1, set_hist=None, **kwargs
+    ) -> Dict[Entry, MultinetError]:
         """
         Synchronously set ADO parameters
 
@@ -148,12 +150,25 @@ class AdoRequest(Request):
         """
         if ppm_user < 1 or ppm_user > 8:
             raise MultinetError("PPM User must be 1 - 8")
-        # v17#with self.pyadoLock:
+        orig_sethist = None
+        # Override sethistory for call
+        if set_hist is not None:
+            # Store original sethist state
+            orig_sethist = not cns3.setHistory.storageOff
+            # Set overrride
+            cns3.keepHistory(set_hist)
+        # Call ADO set
         self._io.set(*entries, ppm_user=ppm_user)
+        if orig_sethist is not None:
+            # Restore original sethist state if stored
+            cns3.keepHistory(orig_sethist)
         return {}
 
     def cancel_async(self):
         self._io.cancel_async()
+
+    def set_history(self, enabled):
+        cns3.keepHistory(enabled)
 
 
 if __name__ == "__main__":

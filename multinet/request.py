@@ -65,11 +65,15 @@ class Request(ABC):
         ...
 
     @abstractmethod
-    def set(self, *entries: Entry, ppm_user=1, **kwargs) -> Dict[Entry, MultinetError]:
+    def set(
+        self, *entries: Entry, ppm_user=1, set_hist: Optional[bool] = None, **kwargs
+    ) -> Dict[Entry, MultinetError]:
         """Set data
 
         Arguments:
             *entries (Entry): Entries, in form of (<device>, <param>, <prop>)  
+            ppm_user (int): PPM user to set (default: 1)
+            set_hist (Optional[bool]): Enable/disable set history for this call only; uses global setting by default (default: None)
 
         Returns:
             bool: did set succeed
@@ -80,6 +84,14 @@ class Request(ABC):
     def cancel_async(self):
         """Cancel all asynchronous requests"""
         ...
+
+    @abstractmethod
+    def set_history(self, enabled: bool):
+        """Enable/disable set history globally
+
+        Args:
+            enabled (bool): Enabled or not
+        """
 
     def add_filter(self, filter_: Filter):
         """Add filter for asynchronous requests

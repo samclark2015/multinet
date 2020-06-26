@@ -76,6 +76,10 @@ class Multirequest(Request):
             errors.update(err)
         return errors
 
+    def set_history(self, enabled):
+        for req in self._requests.values():
+            req.set_history(enabled)
+
     # def async_handler(self, *entries, ppm_user: Union[int, List[int]] = 1):
     #     def callback(func: Callback, data: Dict[Entry, Any], ppm_user: int):
     #         try:

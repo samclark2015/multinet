@@ -21,10 +21,11 @@ class HttpRequest(Request):
         super().__init__()
         self.server = server
         self.polling_period = polling_period
-        self._context = ""
+        self._context = {}
         self._callbacks: Dict[str, Tuple[Callback, bool]] = {}
         self._cancel_async = False
         self._lock = threading.Lock()
+        self._set_hist = True
 
     @lru_cache(maxsize=32)
     def get_meta(
@@ -92,8 +93,12 @@ class HttpRequest(Request):
                         data[(*key[:2], "timestamp")] = entry["timestamp"]
         return data
 
-    def set(self, *entries: Entry, ppm_user=1, **kwargs) -> Dict[Entry, MultinetError]:
-        context = self._get_context()
+    def set(
+        self, *entries: Entry, ppm_user=1, set_hist=None, **kwargs
+    ) -> Dict[Entry, MultinetError]:
+        if set_hist is None:
+            set_hist = self._set_hist
+        context = self._get_context(set_hist)
         names, props, values = self._unpack_args(*entries, is_set=True)
         payload = {
             "names": names,
@@ -152,6 +157,9 @@ class HttpRequest(Request):
         thread = threading.Thread(target=self._async_thread, args=(rid, immediate))
         thread.start()
         return {}
+
+    def set_history(self, enabled):
+        self._set_hist = enabled
 
     def _async_thread(self, rid, immediate):
         # internal thread function. It polls for http results and
@@ -213,15 +221,16 @@ class HttpRequest(Request):
         self.logger.info("_getAsync_thread: exiting")
         return 0
 
-    def _get_context(self):
-        if not self._context:
-            pid = str(os.getpid())
+    def _get_context(self, with_sethist):
+        if with_sethist not in self._context:
+            pid = os.getpid()
             host = socket.gethostname()
-            uname = getpass.getuser()
+            uname = getpass.getuser() if with_sethist else "none"
+            proc = (sys.argv[0] or __name__) if with_sethist else "none"
             payload = {
                 "user": uname,
-                "procName": sys.argv[0] or __name__,
-                "procId": int(pid),
+                "procName": proc,
+                "procId": pid,
                 "machine": host,
             }
 
@@ -233,8 +242,8 @@ class HttpRequest(Request):
                 self.logger.error("get context failed: %s", exc)
                 return 2
 
-            self._context = r.text
-        return self._context
+            self._context[with_sethist] = r.text
+        return self._context[with_sethist]
 
     @staticmethod
     def _convert_value(val, type_):
