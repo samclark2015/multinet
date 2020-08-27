@@ -7,10 +7,14 @@
 #   - multiple constraints should be on one line
 #       e.g. multinet>=0.1.3,<0.2.2,!=0.2.1
 #   - including all specs from another setup is allowed
-#     (refer to the setup's TXT file)
+#     (refer to the setup's TXT file; best practice = give full path)
 #       e.g. -r production.txt
+#
+# If you're developing a package in /path/to/my/dev/package/,
+# you can include that as well
+#   e.g. /home/cfsd/me/my_package/
 #
 # For more help, see:
 # www.cadops.bnl.gov/Controls/ControlsWiki/index.php/Python_Package_Management
 
--r production.in
+-r production.txt

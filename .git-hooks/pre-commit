@@ -4,7 +4,7 @@
 # never compiles the corresponding .txt file
 
 if [ -f "$(git rev-parse --show-toplevel)/.black-on-commit" ]; then
-    FILES=$(git diff --cached --name-only | grep -E '\.(py)$')
+    FILES=$(git diff --staged --diff-filter ACM --name-only | grep -E '\.(py)$')
 	if [ ! -z "$FILES" ]; then
 		python3 -m black $FILES
 		git add $FILES

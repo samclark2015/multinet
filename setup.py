@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 
 from setuptools import setup, find_packages
+from pip._internal.req import parse_requirements
+from pip._internal.download import PipSession
 
+requirements = parse_requirements("requirements/production.txt", session=PipSession())
 
 PACKAGE_NAME = "multinet"
 
+Manually 
 dependencies = [
     # 'numpy',
+    *[str(req.req) for req in requirements]
 ]
 
 setup(
