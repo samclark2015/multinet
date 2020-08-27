@@ -80,6 +80,11 @@ class Multirequest(Request):
         for req in self._requests.values():
             req.set_history(enabled)
 
+    def clear_metadata(self):
+        self._ado_req._io.handles.clear()
+        cns3.metaDataDict.clear()
+        
+
     # def async_handler(self, *entries, ppm_user: Union[int, List[int]] = 1):
     #     def callback(func: Callback, data: Dict[Entry, Any], ppm_user: int):
     #         try:
