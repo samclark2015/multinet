@@ -83,7 +83,6 @@ class Multirequest(Request):
     def clear_metadata(self):
         self._ado_req._io.handles.clear()
         cns3.metaDataDict.clear()
-        
 
     # def async_handler(self, *entries, ppm_user: Union[int, List[int]] = 1):
     #     def callback(func: Callback, data: Dict[Entry, Any], ppm_user: int):
@@ -128,24 +127,23 @@ class Multirequest(Request):
         for req in self._requests.values():
             req.cancel_async()
 
-    @classmethod
-    def _process_entries(cls, entries):
+    def _process_entries(self, entries):
         results = defaultdict(list)
         errors: Dict[str, MultinetError] = {}
         for entry in entries:
             device = entry[0]
-            if device in cls._types:
-                type_ = cls._types[device]
+            if device in self._types:
+                type_ = self._types[device]
             else:
                 cns_entry = cns3.cnslookup(device)
                 if cns_entry is None:
                     type_ = None
                 else:
                     type_ = EntryType.get_type(cns_entry.type)
-                    cls._types[device] = type_
+                    self._types[device] = type_
             if type_ is None:
                 errors[entry] = MultinetError("CNS lookup failed")
             else:
-                logging.debug("Using %s for %s", type_, entry)
+                self.logger.debug("Using %s for %s", type_, entry)
                 results[type_].append(entry)
         return results, errors
