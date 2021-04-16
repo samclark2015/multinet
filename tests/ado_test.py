@@ -13,7 +13,7 @@ def req():
 
 def test_array(req):
     data = req.get(("simple.test", "charArrayS"), ("simple.test", "charS"))
-    assert isinstance(data[("simple.test", "charArrayS")], list)
+    assert isinstance(data[("simple.test", "charArrayS")], (list, tuple))
 
 
 def test_meta(req):
