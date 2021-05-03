@@ -43,6 +43,7 @@ class AdoRequest(Request):
         ppm_user=1,
         timestamp=True,
         immediate=False,
+        grouping="individual",
         **kwargs,
     ) -> Dict[Entry, MultinetError]:
         """
@@ -50,16 +51,33 @@ class AdoRequest(Request):
 
         Arguments:
         	callback: Callable object taking arguments results_dict, ppm_user
-        	args: One or more tuple(<ado_name>, <parameter_name>, [property_name]); property_name defaults to 'value'
+        	args: One or more tuple(<ado>, <parameter>, [property]); property defaults to 'value'
         	ppm_user: int; PPM User 1 - 8 (default 1)
         	timestamp: boolean; should timestamps be included (default True)
         	immediate: boolean; should an initial get be performed immediately (default False)
+            grouping: str; how async data should be reported (default "individual")
+                Grouping choices:
+                "ado": every parameter on the same ADO is reported at the same time
+                "parameter": every property on the same parameter is reported at the same time
+                "individual" (default): each passed parameter/property is reported individually
 
         Returns: 
             dict: Any errors (empty means success)
         """
         if not callable(callback):
             raise ValueError("Callback must be callable")
+
+        if grouping == "ado":
+            entries = [tuple(group) for _, group in groupby(entries, lambda e: e[0])]
+        elif grouping == "parameter":
+            entries = [tuple(group) for _, group in groupby(entries, lambda e: e[0:2])]
+        elif grouping == "individual":
+            entries = [(entry,) for entry in entries]
+        else:
+            raise ValueError(f"Invalid grouping type '{grouping}'")
+
+        print(entries)
+
         if ppm_user < 1 or ppm_user > 8:
             raise ValueError("PPM User must be 1 - 8")
         self.logger.debug("args[%d]: %s", len(entries), entries)
@@ -78,10 +96,10 @@ class AdoRequest(Request):
                 cb(data, ppm_user)
 
         errs = {}
-        for entry in entries:
+        for group in entries:
             self._io.get_async(
-                lambda data: transform(entries, data, callback),
-                entry,
+                lambda data: transform(group, data, callback),
+                *group,
                 timestamp=timestamp,
                 ppm_user=ppm_user,
             )
@@ -122,7 +140,9 @@ class AdoRequest(Request):
         # first argument is always ADO
         response = {}
         for ado_name, group in groupby(entries, itemgetter(0)):
+            print(ado_name)
             meta = self._io.get_meta(ado_name, all=True)
+            print(meta)
             for entry in group:
                 try:
                     if len(entry) == 1:
