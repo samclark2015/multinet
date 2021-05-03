@@ -76,8 +76,6 @@ class AdoRequest(Request):
         else:
             raise ValueError(f"Invalid grouping type '{grouping}'")
 
-        print(grouped_entries)
-
         if ppm_user < 1 or ppm_user > 8:
             raise ValueError("PPM User must be 1 - 8")
         self.logger.debug("args[%d]: %s", len(entries), entries)
@@ -141,9 +139,7 @@ class AdoRequest(Request):
         # first argument is always ADO
         response = {}
         for ado_name, group in groupby(entries, itemgetter(0)):
-            print(ado_name)
             meta = self._io.get_meta(ado_name, all=True)
-            print(meta)
             for entry in group:
                 try:
                     if len(entry) == 1:
