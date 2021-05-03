@@ -68,24 +68,21 @@ class AdoRequest(Request):
             raise ValueError("Callback must be callable")
 
         if grouping == "ado":
-            entries = [tuple(group) for _, group in groupby(entries, lambda e: e[0])]
+            grouped_entries = [tuple(group) for _, group in groupby(entries, lambda e: e[0])]
         elif grouping == "parameter":
-            entries = [tuple(group) for _, group in groupby(entries, lambda e: e[0:2])]
+            grouped_entries = [tuple(group) for _, group in groupby(entries, lambda e: e[0:2])]
         elif grouping == "individual":
-            entries = [(entry,) for entry in entries]
+            grouped_entries = [(entry,) for entry in entries]
         else:
             raise ValueError(f"Invalid grouping type '{grouping}'")
 
-        print(entries)
+        print(grouped_entries)
 
         if ppm_user < 1 or ppm_user > 8:
             raise ValueError("PPM User must be 1 - 8")
         self.logger.debug("args[%d]: %s", len(entries), entries)
 
-        if immediate:
-            callback(
-                self.get(*entries, ppm_user=ppm_user, timestamp=timestamp), ppm_user
-            )
+
 
         def transform(entries, data, cb):
             ppm_user = data["ppmuser"] + 1
@@ -96,9 +93,13 @@ class AdoRequest(Request):
                 cb(data, ppm_user)
 
         errs = {}
-        for group in entries:
+        for group in grouped_entries:
+            if immediate:
+                callback(
+                    self.get(*group, ppm_user=ppm_user, timestamp=timestamp), ppm_user
+                )
             self._io.get_async(
-                lambda data: transform(group, data, callback),
+                lambda data: transform(entries, data, callback),
                 *group,
                 timestamp=timestamp,
                 ppm_user=ppm_user,
