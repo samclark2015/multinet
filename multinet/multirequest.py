@@ -1,9 +1,8 @@
 import socket
-import logging
 import warnings
-from ipaddress import ip_address, ip_network
 from collections import defaultdict
 from enum import Enum
+from ipaddress import ip_address, ip_network
 from typing import *
 
 from cad_io import cns3
@@ -11,7 +10,7 @@ from cad_io import cns3
 from .ado_request import AdoRequest
 from .cdev_request import CDEVRequest
 from .http_request import HttpRequest
-from .request import Callback, Entry, Metadata, Request, MultinetError
+from .request import Callback, Entry, Metadata, MultinetError, Request
 
 
 def is_controls_host(ip_addr=None):
@@ -22,9 +21,10 @@ def is_controls_host(ip_addr=None):
         except:  # pylint: disable=bare-except
             warnings.warn("Unable to get Hostname and IP")
             return False
-    return ip_address(ip_addr) in ip_network("130.199.104.0/22") or ip_address(
-        ip_addr
-    ) in ip_network("130.199.108.0/22")
+    ip_addr = ip_address(ip_addr)
+    return ip_addr in ip_network("130.199.104.0/22") or ip_addr in ip_network(
+        "130.199.108.0/22"
+    )
 
 
 class EntryType(Enum):
@@ -83,26 +83,6 @@ class Multirequest(Request):
     def clear_metadata(self):
         self._ado_req._io.handles.clear()
         cns3.metaDataDict.clear()
-
-    # def async_handler(self, *entries, ppm_user: Union[int, List[int]] = 1):
-    #     def callback(func: Callback, data: Dict[Entry, Any], ppm_user: int):
-    #         try:
-    #             func(data, ppm_user)
-    #         except Exception as e:
-    #             self.logger.warning(f"Error handling callback for {data.keys()}")
-    #             self.logger.info(traceback.format_exc())
-
-    #     def wrapper(func):
-    #         if isinstance(ppm_user, Iterable):
-    #             for user in ppm_user:
-    #                 self.get_async(partial(callback, func), *entries, ppm_user=user)
-    #         elif isinstance(ppm_user, int):
-    #             self.get_async(partial(callback, func), *entries, ppm_user=ppm_user)
-    #         else:
-    #             raise ValueError("PPM User must be int 1 - 8, or list of ints 1 - 8")
-    #         return func
-
-    #     return wrapper
 
     def get_meta(
         self, *entries, **kwargs
