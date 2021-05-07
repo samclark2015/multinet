@@ -3,19 +3,24 @@ from operator import itemgetter
 from functools import lru_cache
 from typing import *
 from cad_io import adoaccess, cns3
+from collections.abc import Iterable
 
 from .request import Entry, Metadata, Request, Callback, MultinetError
 
 
 class AdoRequest(Request):
-    @staticmethod
-    def transform_data(entries, data):
+    def transform_data(self, entries, data):
         ret_dict = {}
         flat_data = {
             (dev, param, prop): value
             for dev, param in data
             for prop, value in data[(dev, param)].items()
         }
+        metadata = self.get_meta(*flat_data.keys())
+        for key, data in metadata.items():
+            if data["count"] == 0 and not isinstance(flat_data[key], Iterable):
+                flat_data[key] = (flat_data[key],)
+
         # Correlate explicitly requested entries
         for entry in entries:
             device, param = entry[:2]
@@ -30,6 +35,7 @@ class AdoRequest(Request):
                 del flat_data[key]
         # Add in additional implicit entries
         ret_dict.update(flat_data)
+
         return ret_dict
 
     def __init__(self):
@@ -68,9 +74,13 @@ class AdoRequest(Request):
             raise ValueError("Callback must be callable")
 
         if grouping == "ado":
-            grouped_entries = [tuple(group) for _, group in groupby(entries, lambda e: e[0])]
+            grouped_entries = [
+                tuple(group) for _, group in groupby(entries, lambda e: e[0])
+            ]
         elif grouping == "parameter":
-            grouped_entries = [tuple(group) for _, group in groupby(entries, lambda e: e[0:2])]
+            grouped_entries = [
+                tuple(group) for _, group in groupby(entries, lambda e: e[0:2])
+            ]
         elif grouping == "individual":
             grouped_entries = [(entry,) for entry in entries]
         else:
@@ -79,8 +89,6 @@ class AdoRequest(Request):
         if ppm_user < 1 or ppm_user > 8:
             raise ValueError("PPM User must be 1 - 8")
         self.logger.debug("args[%d]: %s", len(entries), entries)
-
-
 
         def transform(entries, data, cb):
             ppm_user = data["ppmuser"] + 1
