@@ -17,4 +17,4 @@
 # For more help, see:
 # www.cadops.bnl.gov/Controls/ControlsWiki/index.php/Python_Package_Management
 
-cad_io>=3.6.5
+cad_io>=3, <4

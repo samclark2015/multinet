@@ -63,6 +63,63 @@ def test_get_async(req: Request, entries):
     assert counter > 0
 
 
+
+@pytest.mark.parametrize(
+    "entries",
+    [
+        ([("simple.test", "sinM")]),
+    ],
+)
+def test_get_async_handler(req: Request, entries):
+    counter = 0
+    condition = Condition()
+
+    @req.async_handler(*entries)
+    def cb(data, ppm_user):
+        nonlocal counter
+        assert all(key in data for key in entries)
+        assert ppm_user == 1
+        counter += 1
+        logging.debug("%d received", counter)
+        with condition:
+            condition.notify_all()
+
+    req.start_asyncs()
+    with condition:
+        condition.wait_for(lambda: counter >= 4, timeout=10)
+    req.cancel_async()
+    assert counter > 0
+
+@pytest.mark.parametrize(
+    "entries",
+    [
+        ([("simple.test", "sinM")]),
+    ],
+)
+def test_get_async_handler_class(req: Request, entries):
+    counter = 0
+    condition = Condition()
+
+    class TestClass:
+        ireq = req
+
+        @ireq.async_handler(*entries)
+        def cb(self, data, ppm_user):
+            nonlocal counter
+            assert all(key in data for key in entries)
+            assert ppm_user == 1
+            counter += 1
+            logging.debug("%d received", counter)
+            with condition:
+                condition.notify_all()
+
+    inst = TestClass()
+    inst.ireq.start_asyncs()
+    with condition:
+        condition.wait_for(lambda: counter >= 4, timeout=10)
+    inst.ireq.cancel_async()
+    assert counter > 0
+
 @pytest.mark.skip(reason="Filters tested externally")
 @pytest.mark.parametrize(
     "entries,set_vals",

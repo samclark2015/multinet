@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 from pip._internal.req import parse_requirements
 from pip._internal.download import PipSession
 
-requirements = parse_requirements("requirements/production.txt", session=PipSession())
+requirements = parse_requirements("requirements/production.in", session=PipSession())
 
 PACKAGE_NAME = "multinet"
 
