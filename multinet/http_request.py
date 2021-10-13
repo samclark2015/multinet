@@ -26,6 +26,7 @@ class HttpRequest(Request):
         self._cancel_async = False
         self._lock = threading.Lock()
         self._set_hist = True
+        self._flags = []
 
     @lru_cache(maxsize=32)
     def get_meta(
@@ -124,7 +125,17 @@ class HttpRequest(Request):
         return data
 
     def cancel_async(self):
-        self._cancel_async = True
+        for flag in self._flags:
+            flag.set()
+        reqs = [
+            self.server + "/DeviceServer/api/device/async/cancel?id=" + str(id)
+            for id in self._callbacks
+        ]
+        for req in reqs:
+            requests.get(req, headers={"Accept": "application/json"})
+
+        self._flags.clear()
+        self._callbacks.clear()
 
     def get_async(
         self,
@@ -154,14 +165,18 @@ class HttpRequest(Request):
         )  # subscription ID, should be used in subsequent polling for result.
         self._callbacks[rid] = callback, timestamp  # register the callback function
         self._cancel_async = False
-        thread = threading.Thread(target=self._async_thread, args=(rid, immediate))
+        flag = threading.Event()
+        self._flags.append(flag)
+        thread = threading.Thread(
+            target=self._async_thread, args=(rid, immediate, flag)
+        )
         thread.start()
         return {}
 
     def set_history(self, enabled):
         self._set_hist = enabled
 
-    def _async_thread(self, rid, immediate):
+    def _async_thread(self, rid, immediate, flag: threading.Event):
         # internal thread function. It polls for http results and
         # calls user callback when any data have been received
         payload = {"id": rid}
@@ -169,7 +184,7 @@ class HttpRequest(Request):
         url = HTTP_SERVER + "/DeviceServer/api/device/async/result"
         count = 0
         callback, timestamp = self._callbacks[rid]
-        while not self._cancel_async:
+        while not flag.wait(self.polling_period):
             r = requests.get(url, payload, headers=headers)
             if r.status_code == requests.codes.ok:  # pylint: disable=no-member
                 data = r.json()
@@ -210,7 +225,6 @@ class HttpRequest(Request):
                                             zipped_dict, ppm_user
                                         )  # call the user callback
                                 count += 1
-                time.sleep(self.polling_period)
             else:
                 error = r.headers.get("CAD-Error")
                 self.logger.error(
