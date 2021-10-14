@@ -4,7 +4,6 @@ import socket
 import sys
 import threading
 import warnings
-import time
 from functools import lru_cache
 from itertools import groupby
 from operator import itemgetter
@@ -62,7 +61,7 @@ class HttpRequest(Request):
         data = {}
         names, props = self._unpack_args(*entries)
         payload = dict(names=names, props=props, ppmuser=ppm_user)
-        httpreq = self.server + "/DeviceServer/api/device/list/valueAndTime"
+        httpreq = self.server + "/DeviceServer/api/device/list/numeric/valueAndTime"
         self.logger.debug("request: %s", httpreq)
         self.logger.debug("GETTING ADO DATA: %s", payload)
 
@@ -73,7 +72,7 @@ class HttpRequest(Request):
         if r.status_code != requests.codes.ok:  # pylint: disable=no-member
             error = r.headers.get("CAD-Error")
             self.logger.error(
-                "Failed to get meta data - HTTP Error: %d, data: %s",
+                "Failed to get data - HTTP Error: %d, data: %s",
                 r.status_code,
                 error,
             )
@@ -86,9 +85,16 @@ class HttpRequest(Request):
                 if "error" in entry:
                     data[key] = MultinetError(entry["error"])
                 else:
-                    value = entry["value"]
                     type_ = entry["type"]
-                    value = self._convert_value(value, type_)
+                    if "value" in entry.keys():
+                        value = entry["value"]
+                        value = self._convert_value(value, type_)
+                    else:
+                        if entry['isarray']:
+                            value = entry['data']
+                        else:
+                            value = entry['data'][0]
+
                     data[key] = value
                     if timestamp and "timestamp" in entry:
                         data[(*key[:2], "timestamp")] = entry["timestamp"]
@@ -152,7 +158,7 @@ class HttpRequest(Request):
         """
         names, props = self._unpack_args(*entries)
         payload = {"names": names, "props": props, "ppmuser": ppm_user}
-        url = HTTP_SERVER + "/DeviceServer/api/device/list/async"
+        url = HTTP_SERVER + "/DeviceServer/api/device/list/numeric/async"
         r = requests.get(url, params=payload)
         if r.status_code != requests.codes.ok:  # pylint: disable=no-member
             error = r.headers.get("CAD-Error")
@@ -199,13 +205,19 @@ class HttpRequest(Request):
                             device = entry["device"]
                             others = entry["property"].split(":")
                             key: Entry = (device, *others)  # type: ignore
-                            if "value" not in entry:
+                            if "value" not in entry and "data" not in entry:
                                 warnings.warn(f"Unable to get {key}; {entry['error']}")
                                 continue
-                            value = entry["value"]
-                            ppm_user = entry["ppmuser"]
                             type_ = entry["type"]
-                            value = self._convert_value(value, type_)
+                            if "data" in entry:
+                                if entry['isarray']:
+                                    value = entry["data"]
+                                else:
+                                    value = entry["data"][0]
+                            else:
+                                value = entry["value"]
+                                value = self._convert_value(value, type_)
+                            ppm_user = entry["ppmuser"]
                             results.append((key, value))
                             if timestamp and "timestamp" in entry:
                                 data[(*key[:2], "timestamp")] = entry["timestamp"]

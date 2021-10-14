@@ -34,7 +34,7 @@ class EntryType(Enum):
 
     @classmethod
     def get_type(cls, type_):
-        if is_controls_host():
+        if not is_controls_host():
             if type_ in ("ADO",):
                 return cls.ADO
             elif type_ in ("CDEVDEVICE",):
@@ -67,7 +67,7 @@ class Multirequest(Request):
         return results
 
     def get_async(
-        self, callback: Callback, *entries: Entry, **kwargs
+            self, callback: Callback, *entries: Entry, **kwargs
     ) -> Dict[Entry, MultinetError]:
         entries, errors = self._process_entries(entries)
         for type_ in entries:
@@ -85,7 +85,7 @@ class Multirequest(Request):
         cns3.metaDataDict.clear()
 
     def get_meta(
-        self, *entries, **kwargs
+            self, *entries, **kwargs
     ) -> Dict[Entry, Union[Metadata, MultinetError]]:
         entries, results = self._process_entries(entries)
         for type_ in entries:
@@ -127,3 +127,38 @@ class Multirequest(Request):
                 self.logger.debug("Using %s for %s", type_, entry)
                 results[type_].append(entry)
         return results, errors
+
+
+# Below for testing only
+def cb(value, ppm_user):
+    print(f"{value} for user {ppm_user}")
+
+
+def timeout(time_out):
+    seconds = 0
+    while seconds < time_out:
+        time.sleep(1)
+        seconds = seconds + 1
+
+
+if __name__ == "__main__":
+    import time
+
+    req = Multirequest()
+    data = req.get(("simple.test", "longArrayS"), ("simple.test", "stringS"), ppm_user=1)
+    print(data)
+    data = req.get(("simple.test", "floatArrayS"))
+    print(data)
+    data = req.get(("simple.test", "stringS"), ppm_user=3)
+    print(data)
+    data = req.get(("simple.test", "degM"))
+    print(50 * "-")
+    req.get_async(cb, ("simple.test", "degM"), ("simple.test", "sinM"), ("simple.test", "varArrayS"),
+                  ("simple.test", "stringS"), immediate=True, ppm_user=3)
+    timeout(4)
+    req.cancel_async()
+
+    print(50 * "-")
+    req.get_async(cb, ("simple.test", "stringS"), immediate=True, ppm_user=5)
+    timeout(2)
+    req.cancel_async()

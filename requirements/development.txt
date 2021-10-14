@@ -6,4 +6,4 @@
 #
 --find-links /ride/release/python/packages/
 
-cad-io==3.6.5             # via -r requirements/production.txt
+cad-io==3.8.1             # via -r requirements/production.txt
