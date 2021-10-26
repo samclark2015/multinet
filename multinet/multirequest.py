@@ -34,7 +34,7 @@ class EntryType(Enum):
 
     @classmethod
     def get_type(cls, type_):
-        if not is_controls_host():
+        if is_controls_host():
             if type_ in ("ADO",):
                 return cls.ADO
             elif type_ in ("CDEVDEVICE",):
