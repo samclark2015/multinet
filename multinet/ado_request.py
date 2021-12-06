@@ -1,11 +1,12 @@
+from collections.abc import Iterable
+from functools import lru_cache
 from itertools import groupby
 from operator import itemgetter
-from functools import lru_cache
 from typing import *
-from cad_io import adoaccess, cns3
-from collections.abc import Iterable
 
-from .request import Entry, Metadata, Request, Callback, MultinetError
+from cad_io import adoaccess, cns3
+
+from .request import Callback, Entry, Metadata, MultinetError, Request
 
 
 class AdoRequest(Request):
@@ -20,6 +21,13 @@ class AdoRequest(Request):
         for key, data in metadata.items():
             if data["count"] == 0 and not isinstance(flat_data[key], Iterable):
                 flat_data[key] = (flat_data[key],)
+
+            # Added signed char conversion to Python (fixes overflow bug)
+            if data["type"] == "CharType":
+                if isinstance(flat_data[key], Iterable):
+                    flat_data[key] = [i - 256  if i > 127 else i for i in flat_data[key]]
+                else:
+                    flat_data[key] = flat_data[key] - 256 if flat_data[key] > 127 else flat_data[key]
 
         # Correlate explicitly requested entries
         for entry in entries:
