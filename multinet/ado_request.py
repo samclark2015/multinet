@@ -17,38 +17,34 @@ class AdoRequest(Request):
             for dev, param in data
             for prop, value in data[(dev, param)].items()
         }
-        metadata = self.get_meta(*flat_data.keys())
-        for key, data in metadata.items():
-            if data["count"] == 0 and not isinstance(flat_data[key], Iterable):
-                flat_data[key] = (flat_data[key],)
 
-            # Added signed char conversion to Python (fixes overflow bug)
-            if data["type"] == "CharType":
-                if isinstance(flat_data[key], Iterable):
-                    flat_data[key] = [i - 256  if i > 127 else i for i in flat_data[key]]
-                else:
-                    flat_data[key] = flat_data[key] - 256 if flat_data[key] > 127 else flat_data[key]
+        for key, value in flat_data.items():
+            if key[2] == "error":
+                orig_key = key[:2]
+                value = MultinetError(value)
+            elif key[2] == "value":
+                orig_key = key if key in entries else key[:2]
+            else:
+                orig_key = key
 
-        # Correlate explicitly requested entries
-        for entry in entries:
-            device, param = entry[:2]
-            prop = entry[2] if len(entry) == 3 else "value"
-            error_key = (device, param, "error")
-            key = (device, param, prop)
-            if error_key in flat_data:
-                ret_dict[entry] = MultinetError(flat_data[error_key])
-                del flat_data[error_key]
-            elif key in flat_data:
-                ret_dict[entry] = flat_data[key]
-                del flat_data[key]
-        # Add in additional implicit entries
-        ret_dict.update(flat_data)
+            if orig_key in self._meta:
+                if self._meta[orig_key]["count"] == 0 and not isinstance(value, Iterable):
+                    value = (value,)
+                
+                if self._meta[orig_key]["type"] == "CharType":
+                    if isinstance(value, Iterable):
+                        value = [i - 256  if i > 127 else i for i in value]
+                    else:
+                        value = value - 256 if value > 127 else value
+
+            ret_dict[orig_key] = value
 
         return ret_dict
 
     def __init__(self):
         super().__init__()
         self._io = adoaccess.IORequest()
+        self._meta = {}
 
     def get_async(
         self,
@@ -80,6 +76,9 @@ class AdoRequest(Request):
         """
         if not callable(callback):
             raise ValueError("Callback must be callable")
+
+        metadata = self.get_meta(*entries)
+        self._meta.update(metadata)
 
         if grouping == "ado":
             grouped_entries = [
