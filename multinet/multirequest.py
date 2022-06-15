@@ -34,12 +34,11 @@ class EntryType(Enum):
 
     @classmethod
     def get_type(cls, type_):
-        if is_controls_host():
-            if type_ in ("ADO",):
-                return cls.ADO
-            elif type_ in ("CDEVDEVICE",):
-                return cls.HTTP
-        else:
+        if not is_controls_host():
+            return cls.HTTP
+        if type_ in ("ADO",):
+            return cls.ADO
+        elif type_ in ("CDEVDEVICE",):
             return cls.HTTP
 
 
@@ -81,7 +80,7 @@ class Multirequest(Request):
             req.set_history(enabled)
 
     def clear_metadata(self):
-        self._ado_req._io.handles.clear()
+        self._ado_req._io._handles.clear()
         cns3.metaDataDict.clear()
 
     def get_meta(
@@ -138,7 +137,7 @@ def timeout(time_out):
     seconds = 0
     while seconds < time_out:
         time.sleep(1)
-        seconds = seconds + 1
+        seconds += 1
 
 
 if __name__ == "__main__":
