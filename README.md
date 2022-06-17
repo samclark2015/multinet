@@ -64,7 +64,7 @@ req = Multirequest()
 data = req.get(("simple.test", "intS"))
 intS = data[("simple.test", "intS")]
 
-if isinstance(intS, multinet.MultinetError):
+if isinstance(intS, MultinetError):
     # handle error
     print("Error getting intS", intS)
 else:
