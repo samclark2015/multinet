@@ -31,6 +31,19 @@ request.get_async(callback, ("simple.test", "sinM"), ("simple.cdev", "degM"))
 request.set(("simple.test", "intS", 7), ("simple.cdev", "doubleS", 3.14))
 ```
 
+**Note:** Device entries in Multinet are specified as tuples.  
+
+For `get()` and `get_async()` requests, this is a 2- or 3-tuple consisting of `(device/ADO, parameter, [property])`.  
+For `set()` requests, this is a 3- or 4-tuple consisting of `(device/ADO, parameter, [property], value)`.  
+Where `[]` is optional.
+
+These entries are passed in as positional arguments as seen above. Alternately, a list of entries can be passed using the "spreading" (`*`) operator:
+
+``` python
+entries = [("simple.test", "sinM"), ("simple.test", "degM")]
+request.get(*entries)
+```
+
 ## API Features
 
 ### Multiple Async Callbacks
@@ -47,7 +60,7 @@ Specifying a PPM user is done by passing `ppm_user=1` to set, get, and get_async
 
 ### Timestamps
 
-Timestamps are available under the key `("<ado>", "<param>", "timestamp")` as a float representing Unix time in seconds with nanosecond resolution, if available. To disable timestamps, pass `timestamp=False` to get/get_async methods (enabled by default).
+Timestamps are available under the key `(ado, param, "timestamp")` as a float representing Unix time in seconds with nanosecond resolution, if available. To disable timestamps, pass `timestamp=False` to get/get_async methods (enabled by default).
 
 ### Immediate Async
 
@@ -85,6 +98,43 @@ if err is not None:
     print("Error setting intS", err)
 ```
 
+## Async Grouping
+Async requests issued to an ADO-type device may be grouped in various ways. This controls how data is returned and processed by the callback function. This is controlled by the `grouping="..."` keyword argument to the `get_async()` method. The options available are:
+
+### "ado"
+All data from a given ADO will be returned at once to the callback function. This includes all parameters and properties requested on an ADO. The "trigger" (i.e., what determines when the data is returned) is the first entry for that ADO.
+``` python
+request.get_async(print, ("simple.test", "sinM"), ("simple.test", "degM"), grouping="ado")
+```
+The print function will receive a dict like the following every time the "sinM:value" property is updated:
+``` python
+{("simple.test", "sinM"): 1.0, ("simple.test", "degM"): 90}
+```
+
+### "parameter"
+All data from a given parameter will be returned at once to the callback function. This includes allproperties requested on a parameter. The "trigger" (i.e., what determines when the data is returned) is the first entry for that parameter.
+``` python
+request.get_async(print, ("simple.test", "sinM"), ("simple.test", "sinM", "timestampSeconds"), grouping="parameter")
+```
+The print function will receive a dict like the following every time the "sinM:value" property is updated:
+``` python
+{("simple.test", "sinM"): 1.0, ("simple.test", "degM", "timestampSeconds"): 1655477543628}
+```
+
+### "individual"
+Each requested property is returned to the callback function immmediately when its value is updated. This is useful for obtaining the most up-to-date information, but makes correlation more complicated:
+``` python
+request.get_async(print, ("simple.test", "sinM"), ("simple.test", "sinM", "timestampSeconds"), grouping="parameter")
+```
+The print function will receive dicts like the following:
+``` python
+# Received when "sinM:value" is updated
+{("simple.test", "sinM"): 1.0} 
+
+# Received when "sinM:timestampSeconds" is updated
+{("simple.test", "degM", "timestampSeconds"): 1655477543628} 
+```
+
 ## Specifying a Protocol
 
 You may not wish to use the flexibility of the Multinet package, and predefine which protocol to use when accessing devices. All request objects use the same interface. Doing this may offer very slight performance gains.
@@ -96,11 +146,6 @@ from multinet import AdoRequest
 req = AdoRequest()
 req.get(("simple.test", "intS")) #
 ```
-
-## Changes from PyADO
-
-- PPM users index from 1, instead of 0
-- Multiple async callbacks may be defined
 
 ## Implementation Details
 
