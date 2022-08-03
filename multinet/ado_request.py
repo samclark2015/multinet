@@ -46,6 +46,18 @@ class AdoRequest(Request):
         self._io = adoaccess.IORequest()
         self._meta = {}
 
+    def default_ppm_user(self):
+        try:
+            r = AdoRequest()
+            entry = ('injSpec.super', 'agsPpmUserM')
+            result = r.get(entry)
+            ppm_user = result.get(entry)
+            if ppm_user < 1 or ppm_user > 8:
+                ppm_user = 1
+        except:
+            ppm_user = 1
+        return ppm_user
+
     def get_async(
         self,
         callback: Callback,
@@ -94,7 +106,7 @@ class AdoRequest(Request):
             raise ValueError(f"Invalid grouping type '{grouping}'")
 
         if ppm_user < 1 or ppm_user > 8:
-            raise ValueError("PPM User must be 1 - 8")
+            ppm_user = self.default_ppm_user()
         self.logger.debug("args[%d]: %s", len(entries), entries)
 
         def transform(entries, data, cb):
@@ -133,6 +145,8 @@ class AdoRequest(Request):
         Returns: 
             Dict[Entry, Any]: values from ADO, MultinetError if errors
         """
+        if ppm_user < 1 or ppm_user > 8:
+            ppm_user = self.default_ppm_user()
         data = self._io.get(*entries, timestamp=timestamp, ppm_user=ppm_user)
         return self.transform_data(entries, data)
 
@@ -181,7 +195,7 @@ class AdoRequest(Request):
             bool: True if successful
         """
         if ppm_user < 1 or ppm_user > 8:
-            raise MultinetError("PPM User must be 1 - 8")
+            ppm_user = self.default_ppm_user()
         orig_sethist = None
         # Override sethistory for call
         if set_hist is not None:
