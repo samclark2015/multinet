@@ -1,17 +1,28 @@
 #!/usr/bin/env python3
 
-from setuptools import setup, find_packages
-from pip._internal.req import parse_requirements
-from pip._internal.download import PipSession
+import re
 
-requirements = parse_requirements("requirements/production.in", session=PipSession())
+from pkg_resources import parse_requirements
+from setuptools import find_packages, setup
 
 PACKAGE_NAME = "multinet"
 
-dependencies = [
-    # 'numpy',
-    *[str(req.req) for req in requirements]
-]
+dependencies = []
+with open("requirements/production.txt") as f:
+    for line in f:
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+
+        match = re.search(r"(\S+)==(\d+)\.(\d+)\.(\d+)", line)
+        if not match: 
+            continue
+
+        pkg, major, minor, patch = match.groups()
+        major = int(major)
+        minor = int(minor)
+        patch = int(patch)
+        dependencies.append(f"{pkg}>={major}.{minor}.{patch},<{major+1}")
 
 setup(
     name=PACKAGE_NAME,

@@ -5,6 +5,7 @@ __pycache__/
 *.pyc
 .mypy_cache/
 ado_inst.py
-.eggs/
-*/version.py
 build/
+.eggs/
+*.egg-info/
+multinet/version.py
