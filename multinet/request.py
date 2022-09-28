@@ -1,14 +1,97 @@
-from abc import ABC, abstractmethod
-from functools import partial
-import traceback
-from typing import *
 import logging
+import re
+import traceback
+from abc import ABC, abstractmethod
+from collections import UserDict
+from functools import partial
+from typing import *
+
 from cad_io.cns3 import getErrorString
 
 Entry = tuple
 Metadata = Dict[str, Any]
 Callback = Callable[[Dict[Entry, Any], int], None]
 Filter = Callable[[Dict[Entry, Any], int], Dict[Entry, Any]]
+
+
+class MultinetResponse(UserDict):
+    def get_error(self, key: Entry):
+        try:
+            self[key]
+            return None
+        except MultinetError as exc:
+            return exc
+
+    def get_status(self, key: Entry):
+        try:
+            self[key]
+            return 0
+        except MultinetError as exc:
+            return exc.error_code
+
+    def get_errors(self):
+        return {
+            k: self.get(k, False)
+            for k in self
+            if isinstance(self.get(k, False), MultinetError)
+        }
+
+    def get(self, key: Entry, should_raise=True):
+        try:
+            return super().get(key)
+        except MultinetError as exc:
+            if should_raise:
+                raise
+            else:
+                return exc
+
+    def __getitem__(self, key: Entry) -> Any:
+        key_trans = self._tranform_key(key)
+
+        if any("*" in seg for seg in key_trans):
+            return self._get_wildcard(key_trans)
+
+        # Special cases
+        if len(key_trans) == 3 and key_trans[2] == "valueAndTime":
+            value = self[key_trans[0], key_trans[1], "value"]
+            ts_second = self[key_trans[0], key_trans[1], "timestampSeconds"]
+            ts_ns = self[key_trans[0], key_trans[1], "timestampNanoSeconds"]
+            return (value, ts_second + ts_ns * 1e-9)
+
+        # Fallthrough
+        try:
+            value = super().__getitem__(key_trans)
+        except KeyError:
+            raise KeyError(key) from None
+
+        return value
+
+    def __contains__(self, key: Any) -> bool:
+        key = self._tranform_key(key)
+        return super().__contains__(key)
+
+    def _get_wildcard(self, key: Entry):
+        subset = self.copy()
+        for i, piece in enumerate(key):
+            if "*" in piece:
+                r = re.compile(piece.replace("*", ".*"))
+                for k in list(subset):
+                    if not r.match(k[i]):
+                        del subset[k]
+            else:
+                for k in list(subset):
+                    if k[i] != piece:
+                        del subset[k]
+        return subset
+
+    def _tranform_key(self, key: Entry):
+        if isinstance(key, str):
+            key = tuple(key.split(":"))  # type: ignore
+
+        if len(key) == 2:
+            key = (key[0], key[1], "value")
+
+        return key
 
 
 class MultinetError(Exception):
@@ -31,7 +114,7 @@ class Request(ABC):
     @abstractmethod
     def get(self, *entries: Entry, ppm_user=1, **kwargs) -> Dict[Entry, Any]:
         """Get data from device synchronously
-        
+
         Arguments:
             *entries (Entry): Entries, in form of (<device>, <param>, <prop>)
 
@@ -45,11 +128,11 @@ class Request(ABC):
         self, callback: Callback, *entries: Entry, immediate=False, ppm_user=1, **kwargs
     ) -> Dict[Entry, MultinetError]:
         """Get data from device asynchronously
-        
+
         Arguments:
             callback (Callable[[Dict[Entry, Any]], None]): callback with arguments <data>, <ppm_user>
             *entries (Entry): Entries, in form of (<device>, <param>, <prop>)
-        
+
         Keyword Arguments:
             immediate (bool): should callback be called immediately after get_async (default: False)
             ppm_user (int): which PPM user to listen for asynchronous data on (default: 1)
@@ -78,7 +161,7 @@ class Request(ABC):
         """Set data
 
         Arguments:
-            *entries (Entry): Entries, in form of (<device>, <param>, <prop>)  
+            *entries (Entry): Entries, in form of (<device>, <param>, <prop>)
             ppm_user (int): PPM user to set (default: 1)
             set_hist (Optional[bool]): Enable/disable set history for this call only; uses global setting by default (default: None)
 
@@ -102,15 +185,14 @@ class Request(ABC):
 
     def add_filter(self, filter_: Filter):
         """Add filter for asynchronous requests
-        
+
         Arguments:
             filter_ (Filter): filter function
         """
         self._filters.append(filter_)
 
     def start_asyncs(self):
-        """Start serving async data, handled by @async_handler(...) decorated functions
-        """
+        """Start serving async data, handled by @async_handler(...) decorated functions"""
 
         def callback(func, data, cb_ppm_user):
             try:
@@ -126,11 +208,17 @@ class Request(ABC):
             if isinstance(ppm_user, Iterable):
                 for user in ppm_user:
                     self.get_async(
-                        func, *entries, ppm_user=user, grouping="parameter",
+                        func,
+                        *entries,
+                        ppm_user=user,
+                        grouping="parameter",
                     )
             elif isinstance(ppm_user, int):
                 self.get_async(
-                    func, *entries, ppm_user=ppm_user, grouping="parameter",
+                    func,
+                    *entries,
+                    ppm_user=ppm_user,
+                    grouping="parameter",
                 )
 
     def async_handler(
@@ -141,7 +229,7 @@ class Request(ABC):
         """Function decorator to nicely set up an async handler function for some parameters
 
         Args:
-            entries (Union[Tuple[str, str], Tuple[str, str, str]]): Parameters to receive updates for. 
+            entries (Union[Tuple[str, str], Tuple[str, str, str]]): Parameters to receive updates for.
             ppm_user (Union[int, List[int]], optional): PPM user to listen on. May be single int or iterable of ints for multiple users. Defaults to 1.
         """
 
@@ -158,6 +246,33 @@ class Request(ABC):
         for filter_ in self._filters:
             data = filter_(data, ppm_user)
         return data
+
+    def _parse_entries(self, entries: Iterable[Entry]):
+        ret = []
+        for entry in entries:
+            if isinstance(entry, str):
+                str_split = cast(
+                    Union[Tuple[str, str], Tuple[str, str, str]],
+                    tuple(entry.split(":")),
+                )
+                if len(str_split) not in (2, 3):
+                    raise ValueError(f"Parameter {entry} too short")
+                entry = str_split
+
+            if len(entry) == 2:
+                entry = (entry[0], entry[1], "value")
+
+            entry = cast(Tuple[str, str, str], entry)
+            if len(entry) == 3 and entry[2] == "valueAndTime":
+                ret += [
+                    (entry[0], entry[1], "value"),
+                    (entry[0], entry[1], "timestampSeconds"),
+                    (entry[0], entry[1], "timestampNanoSeconds"),
+                ]
+            else:
+                ret.append(entry)
+
+        return ret
 
     ### Private magic-methods for Pythonicness ###
     # __enter__ and __exit__ define context manager (with ...: ...) functionality

@@ -8,9 +8,11 @@ from functools import lru_cache
 from itertools import groupby
 from operator import itemgetter
 from typing import *
+
 import requests
 
-from .request import Entry, Metadata, Request, Callback, MultinetError
+from .request import (Callback, Entry, Metadata, MultinetError,
+                      MultinetResponse, Request)
 
 HTTP_SERVER = "http://csgateway01.pbn.bnl.gov"
 
@@ -59,6 +61,7 @@ class HttpRequest(Request):
         self, *entries: Entry, ppm_user=1, timestamp=True, **kwargs
     ) -> Dict[Entry, Any]:
         data = {}
+        entries = self._parse_entries(entries)
         names, props = self._unpack_args(*entries)
         payload = dict(names=names, props=props, ppmuser=ppm_user)
         httpreq = self.server + "/DeviceServer/api/device/list/numeric/valueAndTime"
@@ -90,15 +93,15 @@ class HttpRequest(Request):
                         value = entry["value"]
                         value = self._convert_value(value, type_)
                     else:
-                        if entry['isarray']:
-                            value = entry['data']
+                        if entry["isarray"]:
+                            value = entry["data"]
                         else:
-                            value = entry['data'][0]
+                            value = entry["data"][0]
 
                     data[key] = value
                     if timestamp and "timestamp" in entry:
                         data[(*key[:2], "timestamp")] = entry["timestamp"]
-        return data
+        return MultinetResponse(data)
 
     def set(
         self, *entries: Entry, ppm_user=1, set_hist=None, **kwargs
@@ -152,10 +155,11 @@ class HttpRequest(Request):
         timestamp=True,
         **kwargs,
     ) -> Dict[Entry, MultinetError]:
-        """ Asynchronous get. 
-        The user defined function callback(*args) will be called 
-        when any parameter in the list have been changed.       
+        """Asynchronous get.
+        The user defined function callback(*args) will be called
+        when any parameter in the list have been changed.
         """
+        entries = self._parse_entries(entries)
         names, props = self._unpack_args(*entries)
         payload = {"names": names, "props": props, "ppmuser": ppm_user}
         url = HTTP_SERVER + "/DeviceServer/api/device/list/numeric/async"
@@ -174,7 +178,7 @@ class HttpRequest(Request):
         flag = threading.Event()
         self._flags.append(flag)
         thread = threading.Thread(
-            target=self._async_thread, args=(rid, immediate, flag)
+            target=self._async_thread, args=(rid, immediate, flag), daemon=True
         )
         thread.start()
         return {}
@@ -205,12 +209,15 @@ class HttpRequest(Request):
                             device = entry["device"]
                             others = entry["property"].split(":")
                             key: Entry = (device, *others)  # type: ignore
+                            if len(key) == 2:
+                                key = (*key, "value")
+
                             if "value" not in entry and "data" not in entry:
                                 warnings.warn(f"Unable to get {key}; {entry['error']}")
                                 continue
                             type_ = entry["type"]
                             if "data" in entry:
-                                if entry['isarray']:
+                                if entry["isarray"]:
                                     value = entry["data"]
                                 else:
                                     value = entry["data"][0]
@@ -221,9 +228,11 @@ class HttpRequest(Request):
                             results.append((key, value))
                             if timestamp and "timestamp" in entry:
                                 data[(*key[:2], "timestamp")] = entry["timestamp"]
+
                         with self._lock:
                             grouped = groupby(
-                                sorted(results, key=itemgetter(0)), itemgetter(0),
+                                sorted(results, key=itemgetter(0)),
+                                itemgetter(0),
                             )
                             matched = [[v for v in g] for _, g in grouped]
                             for group in zip(*matched):
@@ -234,7 +243,7 @@ class HttpRequest(Request):
                                     )
                                     if zipped_dict:
                                         callback(
-                                            zipped_dict, ppm_user
+                                            MultinetResponse(zipped_dict), ppm_user
                                         )  # call the user callback
                                 count += 1
             else:
@@ -244,7 +253,7 @@ class HttpRequest(Request):
                 )
 
                 return 1
-        self.logger.info("_getAsync_thread: exiting")
+        self.logger.info("_async_thread: exiting")
         return 0
 
     def _get_context(self, with_sethist):

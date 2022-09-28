@@ -10,7 +10,8 @@ from cad_io import cns3
 from .ado_request import AdoRequest
 from .cdev_request import CDEVRequest
 from .http_request import HttpRequest
-from .request import Callback, Entry, Metadata, MultinetError, Request
+from .request import (Callback, Entry, Metadata, MultinetError,
+                      MultinetResponse, Request)
 
 
 def is_controls_host(ip_addr=None):
@@ -63,7 +64,7 @@ class Multirequest(Request):
             request = self._requests[type_]
             res = request.get(*entries[type_], **kwargs)
             results.update(res)
-        return results
+        return MultinetResponse(results)
 
     def get_async(
             self, callback: Callback, *entries: Entry, **kwargs
@@ -73,7 +74,7 @@ class Multirequest(Request):
             request = self._requests[type_]
             err = request.get_async(callback, *entries[type_], **kwargs)
             errors.update(err)
-        return errors
+        return MultinetResponse(errors)
 
     def set_history(self, enabled):
         for req in self._requests.values():
@@ -91,7 +92,7 @@ class Multirequest(Request):
             request = self._requests[type_]
             res = request.get_meta(*entries[type_], **kwargs)
             results.update(res)
-        return results
+        return MultinetResponse(results)
 
     def set(self, *entries: Entry, **kwargs) -> Dict[Entry, MultinetError]:
         entries, errors = self._process_entries(entries)

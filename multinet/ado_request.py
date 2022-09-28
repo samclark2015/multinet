@@ -6,40 +6,18 @@ from typing import *
 
 from cad_io import adoaccess, cns3
 
-from .request import Callback, Entry, Metadata, MultinetError, Request
+from .request import (Callback, Entry, Metadata, MultinetError,
+                      MultinetResponse, Request)
 
 
 class AdoRequest(Request):
     def transform_data(self, entries, data):
-        ret_dict = {}
-        flat_data = {
-            (dev, param, prop): value
-            for dev, param in data
-            for prop, value in data[(dev, param)].items()
-        }
+        result = {}
+        for (ado, param), props in data.items():
+            for prop, value in props.items():
+                result[(ado, param, prop)] = value
 
-        for key, value in flat_data.items():
-            if key[2] == "error":
-                orig_key = key[:2]
-                value = MultinetError(value)
-            elif key[2] == "value":
-                orig_key = key if key in entries else key[:2]
-            else:
-                orig_key = key
-
-            if orig_key in self._meta:
-                if self._meta[orig_key]["count"] == 0 and not isinstance(value, Iterable):
-                    value = (value,)
-                
-                if self._meta[orig_key]["type"] == "CharType":
-                    if isinstance(value, Iterable):
-                        value = [i - 256  if i > 127 else i for i in value]
-                    else:
-                        value = value - 256 if value > 127 else value
-
-            ret_dict[orig_key] = value
-
-        return ret_dict
+        return MultinetResponse(result)
 
     def __init__(self):
         super().__init__()
@@ -53,7 +31,7 @@ class AdoRequest(Request):
         ppm_user=1,
         timestamp=True,
         immediate=False,
-        grouping="individual",
+        grouping="parameter",
         **kwargs,
     ) -> Dict[Entry, MultinetError]:
         """
@@ -79,6 +57,8 @@ class AdoRequest(Request):
 
         metadata = self.get_meta(*entries)
         self._meta.update(metadata)
+
+        entries = self._parse_entries(entries)
 
         if grouping == "ado":
             grouped_entries = [
@@ -133,6 +113,7 @@ class AdoRequest(Request):
         Returns: 
             Dict[Entry, Any]: values from ADO, MultinetError if errors
         """
+        entries = self._parse_entries(entries)
         data = self._io.get(*entries, timestamp=timestamp, ppm_user=ppm_user)
         return self.transform_data(entries, data)
 
@@ -153,6 +134,7 @@ class AdoRequest(Request):
         """
         # first argument is always ADO
         response = {}
+        entries = self._parse_entries(entries)
         for ado_name, group in groupby(entries, itemgetter(0)):
             meta = self._io.get_meta(ado_name, all=True)
             for entry in group:
