@@ -70,7 +70,7 @@ class AdoRequest(Request):
         metadata = self.get_meta(*entries)
         self._meta.update(metadata)
 
-        entries = self._parse_entries(entries)
+        entries, errs = self._parse_entries(entries)
 
         if grouping == "ado":
             grouped_entries = [
@@ -97,7 +97,6 @@ class AdoRequest(Request):
             if data:
                 cb(data, ppm_user)
 
-        errs = {}
         for group in grouped_entries:
             if immediate:
                 callback(
@@ -125,11 +124,12 @@ class AdoRequest(Request):
         Returns: 
             Dict[Entry, Any]: values from ADO, MultinetError if errors
         """
-        entries = self._parse_entries(entries)
+        entries, response = self._parse_entries(entries)
         if ppm_user < 1 or ppm_user > 8:
             ppm_user = self.default_ppm_user()
         data = self._io.get(*entries, timestamp=timestamp, ppm_user=ppm_user)
-        return self.transform_data(entries, data)
+        response.update(self.transform_data(entries, data))
+        return response
 
     @lru_cache(maxsize=32)
     def get_meta(
@@ -147,8 +147,7 @@ class AdoRequest(Request):
             Dict[Entry, Union[MetaData, MultinetError]]: metadata from ADO
         """
         # first argument is always ADO
-        response = {}
-        entries = self._parse_entries(entries)
+        entries, response = self._parse_entries(entries)
         for ado_name, group in groupby(entries, itemgetter(0)):
             meta = self._io.get_meta(ado_name, all=True)
             for entry in group:

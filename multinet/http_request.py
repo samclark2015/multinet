@@ -60,8 +60,7 @@ class HttpRequest(Request):
     def get(
         self, *entries: Entry, ppm_user=1, timestamp=True, **kwargs
     ) -> Dict[Entry, Any]:
-        data = {}
-        entries = self._parse_entries(entries)
+        entries, data = self._parse_entries(entries)
         names, props = self._unpack_args(*entries)
         payload = dict(names=names, props=props, ppmuser=ppm_user)
         httpreq = self.server + "/DeviceServer/api/device/list/numeric/valueAndTime"
@@ -159,7 +158,7 @@ class HttpRequest(Request):
         The user defined function callback(*args) will be called
         when any parameter in the list have been changed.
         """
-        entries = self._parse_entries(entries)
+        entries, data = self._parse_entries(entries)
         names, props = self._unpack_args(*entries)
         payload = {"names": names, "props": props, "ppmuser": ppm_user}
         url = HTTP_SERVER + "/DeviceServer/api/device/list/numeric/async"
@@ -181,7 +180,7 @@ class HttpRequest(Request):
             target=self._async_thread, args=(rid, immediate, flag), daemon=True
         )
         thread.start()
-        return {}
+        return data
 
     def set_history(self, enabled):
         self._set_hist = enabled

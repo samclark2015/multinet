@@ -250,6 +250,7 @@ class Request(ABC):
 
     def _parse_entries(self, entries: Iterable[Entry]):
         ret = []
+        errors = {}
         for entry in entries:
             if isinstance(entry, str):
                 str_split = cast(
@@ -273,12 +274,11 @@ class Request(ABC):
                         (entry[0], entry[1], "timestampNanoSeconds"),
                     ]
                 elif entry[2] in ("timeInfo", "valueAndTrigger", "valueAndCycle"):
-                    warnings.warn(f"Pseudo-property {entry[2]} unsupported. Discarding.")
-                    continue
+                    errors[entry] = MultinetError(f"Pseudo-property {entry[2]} unsupported")
             else:
                 ret.append(entry)
 
-        return ret
+        return ret, errors
 
     ### Private magic-methods for Pythonicness ###
     # __enter__ and __exit__ define context manager (with ...: ...) functionality
