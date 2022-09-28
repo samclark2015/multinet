@@ -265,16 +265,15 @@ class Request(ABC):
                 entry = (entry[0], entry[1], "value")
 
             entry = cast(Tuple[str, str, str], entry)
-            if len(entry) == 3:
-                # Check for psuedo properties & convert as needed
-                if entry[2] == "valueAndTime":
-                    ret += [
-                        (entry[0], entry[1], "value"),
-                        (entry[0], entry[1], "timestampSeconds"),
-                        (entry[0], entry[1], "timestampNanoSeconds"),
-                    ]
-                elif entry[2] in ("timeInfo", "valueAndTrigger", "valueAndCycle"):
-                    errors[entry] = MultinetError(f"Pseudo-property {entry[2]} unsupported")
+            # Check for psuedo properties & convert as needed
+            if entry[2] == "valueAndTime":
+                ret += [
+                    (entry[0], entry[1], "value"),
+                    (entry[0], entry[1], "timestampSeconds"),
+                    (entry[0], entry[1], "timestampNanoSeconds"),
+                ]
+            elif entry[2] in ("timeInfo", "valueAndTrigger", "valueAndCycle"):
+                errors[entry] = MultinetError(f"Pseudo-property {entry[2]} unsupported")
             else:
                 ret.append(entry)
 

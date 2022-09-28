@@ -67,10 +67,10 @@ class AdoRequest(Request):
         if not callable(callback):
             raise ValueError("Callback must be callable")
 
+        entries, errs = self._parse_entries(entries)
+
         metadata = self.get_meta(*entries)
         self._meta.update(metadata)
-
-        entries, errs = self._parse_entries(entries)
 
         if grouping == "ado":
             grouped_entries = [
