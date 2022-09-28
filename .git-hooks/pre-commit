@@ -24,8 +24,8 @@ do
     then
         git add requirements/$name.txt
         echo "requirements/$name.txt was not up-to-date!"
-        echo "Re-run commit; it has been updated automatically."
-        RETURN_VAL=false
+        echo "It has been updated automatically."
+        # RETURN_VAL=false
     fi
     rm requirements/temp
 done

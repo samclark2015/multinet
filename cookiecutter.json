@@ -1,5 +1,6 @@
 {
     "_template": "git@gitlab.pbn.bnl.gov:cookiecutters/python-lib.git",
     "package_name": "multinet",
-    "setup_gitlab_project": "false"
+    "setup_gitlab_project": "false",
+    "_template_hash": "a64a31547ecf146bd490ebd7bf672f5cd44410a7"
 }
