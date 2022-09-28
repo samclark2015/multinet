@@ -1,6 +1,7 @@
 import logging
 import re
 import traceback
+import warnings
 from abc import ABC, abstractmethod
 from collections import UserDict
 from functools import partial
@@ -263,12 +264,17 @@ class Request(ABC):
                 entry = (entry[0], entry[1], "value")
 
             entry = cast(Tuple[str, str, str], entry)
-            if len(entry) == 3 and entry[2] == "valueAndTime":
-                ret += [
-                    (entry[0], entry[1], "value"),
-                    (entry[0], entry[1], "timestampSeconds"),
-                    (entry[0], entry[1], "timestampNanoSeconds"),
-                ]
+            if len(entry) == 3:
+                # Check for psuedo properties & convert as needed
+                if entry[2] == "valueAndTime":
+                    ret += [
+                        (entry[0], entry[1], "value"),
+                        (entry[0], entry[1], "timestampSeconds"),
+                        (entry[0], entry[1], "timestampNanoSeconds"),
+                    ]
+                elif entry[2] in ("timeInfo", "valueAndTrigger", "valueAndCycle"):
+                    warnings.warn(f"Pseudo-property {entry[2]} unsupported. Discarding.")
+                    continue
             else:
                 ret.append(entry)
 
