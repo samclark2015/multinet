@@ -49,7 +49,7 @@ class MultinetResponse(UserDict):
     def __getitem__(self, key: Entry) -> Any:
         if super().__contains__(key):
             return super().__getitem__(key)
-            
+        
         key_trans = self._tranform_key(key)
 
         if any("*" in seg for seg in key_trans):
@@ -280,7 +280,7 @@ class Request(ABC):
             else:
                 ret.append(entry)
 
-        return ret, errors
+        return ret, MultinetResponse(errors)
 
     ### Private magic-methods for Pythonicness ###
     # __enter__ and __exit__ define context manager (with ...: ...) functionality

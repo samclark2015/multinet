@@ -4,9 +4,8 @@ from threading import Condition, Thread
 from time import sleep
 
 import pytest
-
-from multinet import filters, Multirequest
-from multinet.request import Request
+from multinet import Multirequest, filters
+from multinet.request import MultinetResponse, Request
 
 
 @pytest.fixture(scope="function")
@@ -23,7 +22,7 @@ def req():
 )
 def test_meta(req: Multirequest, entries):
     meta = req.get_meta(*entries)
-    assert isinstance(meta, dict)
+    assert isinstance(meta, MultinetResponse)
     assert all(key in meta for key in entries)
 
 
@@ -32,7 +31,7 @@ def test_meta(req: Multirequest, entries):
 )
 def test_get(req: Request, entries):
     data = req.get(*entries)
-    assert isinstance(data, dict)
+    assert isinstance(data, MultinetResponse)
     assert all(key in data for key in entries)
 
 

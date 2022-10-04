@@ -1,9 +1,11 @@
-import pytest
-from multinet.ado_request import AdoRequest
 import logging
-from threading import Condition, Thread, Event
-from multinet import filters
+from threading import Condition, Event, Thread
 from time import sleep
+
+import pytest
+from multinet import filters
+from multinet.ado_request import AdoRequest
+from multinet.request import MultinetResponse
 
 
 @pytest.fixture(scope="function")
@@ -13,19 +15,20 @@ def req():
 
 def test_array(req):
     data = req.get(("simple.test", "charArrayS"), ("simple.test", "charS"))
+    assert isinstance(data, MultinetResponse)
     assert isinstance(data[("simple.test", "charArrayS")], (list, tuple))
 
 
 def test_meta(req):
     meta = req.get_meta(("simple.test", "sinM", "timestampSeconds"))
-    assert isinstance(meta, dict)
+    assert isinstance(meta, MultinetResponse)
     logging.info(meta)
 
 
 def test_get(req: AdoRequest):
     keys = [("simple.test", "sinM"), ("simple.test.sys5", "sinM")]
     data = req.get(*keys)
-    assert isinstance(data, dict)
+    assert isinstance(data, MultinetResponse)
     assert all(key in data for key in keys)
 
 
@@ -87,7 +90,7 @@ def test_get_entries_list(req):
     keys = [("simple.test:sinM"), ("simple.test.sys5:sinM")]
     ent = [tuple(key.split(":")) for key in keys]
     data = req.get(*ent)
-    assert isinstance(data, dict)
+    assert isinstance(data, MultinetResponse)
     all(key in data for key in ent)
 
 

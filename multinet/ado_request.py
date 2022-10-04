@@ -27,7 +27,7 @@ class AdoRequest(Request):
     def default_ppm_user(self):
         try:
             r = AdoRequest()
-            entry = ('injSpec.super', 'agsPpmUserM')
+            entry = ("injSpec.super", "agsPpmUserM")
             result = r.get(entry)
             ppm_user = result.get(entry)
             if ppm_user < 1 or ppm_user > 8:
@@ -50,18 +50,18 @@ class AdoRequest(Request):
         Get ADO parameters asynchronously
 
         Arguments:
-        	callback: Callable object taking arguments results_dict, ppm_user
-        	args: One or more tuple(<ado>, <parameter>, [property]); property defaults to 'value'
-        	ppm_user: int; PPM User 1 - 8 (default 1)
-        	timestamp: boolean; should timestamps be included (default True)
-        	immediate: boolean; should an initial get be performed immediately (default False)
+                callback: Callable object taking arguments results_dict, ppm_user
+                args: One or more tuple(<ado>, <parameter>, [property]); property defaults to 'value'
+                ppm_user: int; PPM User 1 - 8 (default 1)
+                timestamp: boolean; should timestamps be included (default True)
+                immediate: boolean; should an initial get be performed immediately (default False)
             grouping: str; how async data should be reported (default "individual")
                 Grouping choices:
                 "ado": every parameter on the same ADO is reported at the same time
                 "parameter": every property on the same parameter is reported at the same time
                 "individual" (default): each passed parameter/property is reported individually
 
-        Returns: 
+        Returns:
             dict: Any errors (empty means success)
         """
         if not callable(callback):
@@ -70,6 +70,12 @@ class AdoRequest(Request):
         entries, errs = self._parse_entries(entries)
 
         metadata = self.get_meta(*entries)
+        # if any of the meta data was not acquired, assume the device/parameter was not valid/available
+        # and remove it from the request that will be sent out
+        for dev, value in metadata.items():
+            if isinstance(value, MultinetError):
+                entries.remove(dev)
+                errs[dev] = value
         self._meta.update(metadata)
 
         if grouping == "ado":
@@ -117,11 +123,11 @@ class AdoRequest(Request):
         Get ADO parameters synchronously
 
         Arguments:
-        	args: One or more tuple(<ado_name>, <parameter_name>, [property_name]); property_name defaults to 'value'
-        	timestamp: boolean; should timestamps be included (default True)
-        	ppm_user: int; PPM User 1 - 8 (default 1)
-        
-        Returns: 
+                args: One or more tuple(<ado_name>, <parameter_name>, [property_name]); property_name defaults to 'value'
+                timestamp: boolean; should timestamps be included (default True)
+                ppm_user: int; PPM User 1 - 8 (default 1)
+
+        Returns:
             Dict[Entry, Any]: values from ADO, MultinetError if errors
         """
         entries, response = self._parse_entries(entries)
@@ -139,11 +145,11 @@ class AdoRequest(Request):
         Get metadata for ado
 
         Arguments:
-        	ado: Name of ADO; returns list of parameters
-        	param: Name of parameter (optional); returns list of properties & values
-        	all: Returns dict of all parameters, properties, and values (optional)
+                ado: Name of ADO; returns list of parameters
+                param: Name of parameter (optional); returns list of properties & values
+                all: Returns dict of all parameters, properties, and values (optional)
 
-        Returns: 
+        Returns:
             Dict[Entry, Union[MetaData, MultinetError]]: metadata from ADO
         """
         # first argument is always ADO
@@ -169,10 +175,10 @@ class AdoRequest(Request):
         Synchronously set ADO parameters
 
         Arguments:
-        	args: One or more tuple(<ado_name>, <parameter_name>, [property_name], <value>); property_name defaults to 'value'
-        	ppm_user (int): PPM User 1 - 8 (default 1)
-            
-        Returns: 
+                args: One or more tuple(<ado_name>, <parameter_name>, [property_name], <value>); property_name defaults to 'value'
+                ppm_user (int): PPM User 1 - 8 (default 1)
+
+        Returns:
             bool: True if successful
         """
         if ppm_user < 1 or ppm_user > 8:
