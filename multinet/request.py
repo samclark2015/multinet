@@ -264,6 +264,10 @@ class Request(ABC):
                     raise ValueError(f"Parameter {entry} too short")
                 entry = str_split
 
+            if len(entry) < 2:
+                ret.append(entry)
+                continue
+
             if len(entry) == 2:
                 entry = (entry[0], entry[1], "value")
 
