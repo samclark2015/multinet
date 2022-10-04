@@ -47,6 +47,9 @@ class MultinetResponse(UserDict):
                 return exc
 
     def __getitem__(self, key: Entry) -> Any:
+        if super().__contains__(key):
+            return super().__getitem__(key)
+            
         key_trans = self._tranform_key(key)
 
         if any("*" in seg for seg in key_trans):
