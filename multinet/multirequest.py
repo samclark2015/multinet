@@ -70,7 +70,10 @@ class Multirequest(Request):
         entries, errors = self._process_entries(entries)
         for type_ in entries:
             request = self._requests[type_]
-            err = request.get_async(callback, *entries[type_], **kwargs)
+            try:
+                err = request.get_async(callback, *entries[type_], **kwargs)
+            except Exception as e:
+                self.logger.debug(str(e))
             errors.update(err)
         return MultinetResponse(errors)
 
