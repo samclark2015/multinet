@@ -18,3 +18,4 @@
 # www.cadops.bnl.gov/Controls/ControlsWiki/index.php/Python_Package_Management
 
 -r production.txt
+mypy
