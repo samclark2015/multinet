@@ -137,7 +137,6 @@ class AdoRequest(Request):
         response.update(self.transform_data(entries, data))
         return response
 
-    @lru_cache(maxsize=32)
     def get_meta(
         self, *entries: Entry, **kwargs
     ) -> Dict[Entry, Union[Metadata, MultinetError]]:
@@ -157,6 +156,10 @@ class AdoRequest(Request):
         for ado_name, group in groupby(entries, itemgetter(0)):
             meta = self._io.get_meta(ado_name, all=True)
             for entry in group:
+                if not meta:
+                    response[entry] = MultinetError("Metadata not available")
+                    continue
+
                 try:
                     if len(entry) == 1:
                         response[entry] = meta
