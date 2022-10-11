@@ -7,8 +7,6 @@ from collections import UserDict
 from functools import partial
 from typing import *
 
-from cad_io.cns3 import getErrorString
-
 Entry = tuple
 Metadata = Dict[str, Any]
 Callback = Callable[[Dict[Entry, Any], int], None]
@@ -49,7 +47,7 @@ class MultinetResponse(UserDict):
     def __getitem__(self, key: Entry) -> Any:
         if super().__contains__(key):
             return super().__getitem__(key)
-        
+
         key_trans = self._tranform_key(key)
 
         if any("*" in seg for seg in key_trans):
@@ -100,8 +98,8 @@ class MultinetResponse(UserDict):
 
 class MultinetError(Exception):
     def __init__(self, err):
-        err_string = getErrorString(err) if isinstance(err, int) else err
-        super().__init__(err_string)
+        # err_string = getErrorString(err) if isinstance(err, int) else err
+        super().__init__(err)
 
 
 class Request(ABC):
@@ -260,8 +258,6 @@ class Request(ABC):
                     Union[Tuple[str, str], Tuple[str, str, str]],
                     tuple(entry.split(":")),
                 )
-                if len(str_split) not in (2, 3):
-                    raise ValueError(f"Parameter {entry} too short")
                 entry = str_split
 
             if len(entry) < 2:
