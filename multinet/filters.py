@@ -1,11 +1,9 @@
-from cad_io.cdev import tags
-
-
 class AnyChange:
-    """Filter for async requests  
-    
+    """Filter for async requests
+
     Filters out all values except those which have changed
     """
+
     def __init__(self):
         self.old_data: dict = {}
 
@@ -18,9 +16,9 @@ class AnyChange:
             if len(key) < 3
             or key[2]
             not in (
-                tags.key_to_tag(tags.TIMESTAMP),
-                tags.key_to_tag(tags.TIMESTAMPSECONDS_TAG),
-                tags.key_to_tag(tags.TIMESTAMPNANOSECONDS_TAG),
+                "timestamp",
+                "timestampSeconds",
+                "timestampNanoSeconds",
             )
         ]
         same = all(key in old_data and old_data[key] == data[key] for key in keys)

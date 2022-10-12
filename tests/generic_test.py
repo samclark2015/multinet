@@ -4,10 +4,8 @@ from threading import Condition, Thread
 from time import sleep
 
 import pytest
-
 from multinet import filters
 from multinet.ado_request import AdoRequest
-from multinet.cdev_request import CDEVRequest
 from multinet.http_request import HttpRequest
 from multinet.request import Request
 

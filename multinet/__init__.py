@@ -1,8 +1,6 @@
-from .multirequest import Multirequest
 from .ado_request import AdoRequest
 from .http_request import HttpRequest
-from .cdev_request import CDEVRequest
+from .multirequest import Multirequest
 from .request import MultinetError
 
-
-__all__ = ["Multirequest", "AdoRequest", "HttpRequest", "CDEVRequest", "MultinetError"]
+__all__ = ["Multirequest", "AdoRequest", "HttpRequest", "MultinetError"]

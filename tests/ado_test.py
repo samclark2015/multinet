@@ -32,7 +32,7 @@ def test_get(req: AdoRequest):
     assert all(key in data for key in keys)
 
 
-def test_get_async(req):
+def test_get_async(req: AdoRequest):
     import math
 
     keys = [("simple.test", "sinM"), ("simple.test", "degM")]
@@ -94,12 +94,12 @@ def test_get_entries_list(req):
     all(key in data for key in ent)
 
 
-def test_set(req):
+def test_set(req: AdoRequest):
     from time import sleep
 
     val = req.get(("simple.test", "intS"))[("simple.test", "intS")]
-    assert not req.set(("simple.test", "intS", 254))
+    assert req.set(("simple.test", "intS", 254)).get_status("simple.test:intS") == 0
     val1 = req.get(("simple.test", "intS"))[("simple.test", "intS")]
     sleep(1)
     assert val1 == 254
-    assert not req.set(("simple.test", "intS", val))
+    assert req.set(("simple.test", "intS", val)).get_status("simple.test:intS") == 0

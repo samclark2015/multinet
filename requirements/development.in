@@ -18,4 +18,5 @@
 # www.cadops.bnl.gov/Controls/ControlsWiki/index.php/Python_Package_Management
 
 -r production.txt
+-e ../cad_io
 mypy

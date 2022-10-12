@@ -2,21 +2,13 @@ from itertools import groupby
 from operator import itemgetter
 from typing import *
 
-from cad_io import cns3
+from cad_io import adoIf, cns
 
 from .request import (Callback, Entry, Metadata, MultinetError,
                       MultinetResponse, Request)
 
 
 class AdoRequest(Request):
-    def transform_data(self, entries, data):
-        result = {}
-        for (ado, param), props in data.items():
-            for prop, value in props.items():
-                result[(ado, param, prop)] = value
-
-        return MultinetResponse(result)
-
     def __init__(self):
         super().__init__()
         self._meta = {}
@@ -41,9 +33,9 @@ class AdoRequest(Request):
         ppm_user=1,
         timestamp=True,
         immediate=False,
-        grouping="parameter",
+        grouping="ado",
         **kwargs,
-    ) -> Dict[Entry, MultinetError]:
+    ) -> MultinetResponse[Entry, MultinetError]:
         """
         Get ADO parameters asynchronously
 
@@ -93,30 +85,48 @@ class AdoRequest(Request):
             ppm_user = self.default_ppm_user()
         self.logger.debug("args[%d]: %s", len(entries), entries)
 
-        def transform(entries, data, cb):
-            ppm_user = data["ppmuser"] + 1
-            del data["ppmuser"]
-            data = self.transform_data(entries, data)
-            data = self._filter_data(data, ppm_user)
-            if data:
-                cb(data, ppm_user)
+        def transform(entries, data, tid, requests, istatus, ppm_index):
+            ppm_user = ppm_index + 1
+            data_iter = iter(data)
+            response = MultinetResponse()
+            for entry, st in zip(entries, status):
+                if st != 0:
+                    response[entry] = MultinetError(st)
+                    continue
+                value = next(data_iter)
+                response[entry] = (
+                    value[0] if metadata[entry]["count"] == 1 else list(value)
+                )
+            response = self._filter_data(response, ppm_user)
+            if response:
+                callback(response, ppm_user)
 
         for group in grouped_entries:
             if immediate:
                 callback(
                     self.get(*group, ppm_user=ppm_user, timestamp=timestamp), ppm_user
                 )
-            self._io.get_async(
-                lambda data: transform(entries, data, callback),
-                *group,
-                timestamp=timestamp,
-                ppm_user=ppm_user,
+            group = list(group)
+            ado_name = group[0][0]
+            handle = self._get_handle(ado_name)
+            if not handle:
+                errs.update(
+                    dict.fromkeys(group, MultinetError("Metadata Not Available"))
+                )
+                continue
+            tid, status = adoIf.adoGetAsync(
+                list=[(handle, *rest) for _, *rest in group],
+                ppmIndex=ppm_user - 1,
+                callback=lambda args, group=group: transform(group, *args),
             )
+
+            for entry, st in zip(group, status):
+                errs[entry] = None if st == 0 else MultinetError(st)
         return errs
 
     def get(
         self, *entries: Entry, ppm_user=1, timestamp=True, **kwargs
-    ) -> Dict[Entry, Any]:
+    ) -> MultinetResponse[Entry, Any]:
         """
         Get ADO parameters synchronously
 
@@ -136,22 +146,28 @@ class AdoRequest(Request):
             group = list(group)
             handle = self._get_handle(ado_name)
             if not handle:
-                response.update(dict.fromkeys(group, MultinetError("Metadata Not Available")))
+                response.update(
+                    dict.fromkeys(group, MultinetError("Metadata Not Available"))
+                )
                 continue
             metadata = self.get_meta(*group)
-            data, status = cns3.adoGet(list=[(handle, *rest) for _, *rest in group], ppmIndex=ppm_user - 1)
+            data, status = adoIf.adoGet(
+                list=[(handle, *rest) for _, *rest in group], ppmIndex=ppm_user - 1
+            )
             data_iter = iter(data)
             for entry, st in zip(group, status):
                 if st != 0:
                     response[entry] = MultinetError(st)
                     continue
                 value = next(data_iter)
-                response[entry] = value[0] if metadata[entry]["count"] == 1 else list(value)
+                response[entry] = (
+                    value[0] if metadata[entry]["count"] == 1 else list(value)
+                )
         return response
 
     def get_meta(
         self, *entries: Entry, **kwargs
-    ) -> Dict[Entry, Union[Metadata, MultinetError]]:
+    ) -> MultinetResponse[Entry, Union[Metadata, MultinetError]]:
         """
         Get metadata for ado
 
@@ -167,7 +183,7 @@ class AdoRequest(Request):
         entries, response = self._parse_entries(entries)
         for ado_name, group in groupby(entries, itemgetter(0)):
             handle = self._get_handle(ado_name)
-            meta, st = cns3.adoMetaData(handle)
+            meta, st = adoIf.adoMetaData(handle)
             for entry in group:
                 if not meta:
                     response[entry] = MultinetError("Metadata not available")
@@ -175,7 +191,12 @@ class AdoRequest(Request):
 
                 try:
                     if len(entry) == 1:
-                        response.update({entry + key: value._asdict() for key, value in meta.items()})
+                        response.update(
+                            {
+                                entry + key: value._asdict()
+                                for key, value in meta.items()
+                            }
+                        )
                     if len(entry) == 2:
                         response[entry] = dict(meta[(entry[1], "value")]._asdict())
                     elif len(entry) == 3:
@@ -185,8 +206,12 @@ class AdoRequest(Request):
         return response
 
     def set(
-        self, *entries: Union[Entry, Dict[Entry, Any]], ppm_user=1, set_hist=None, **kwargs
-    ) -> Dict[Entry, MultinetError]:
+        self,
+        *entries: Union[Entry, Dict[Entry, Any]],
+        ppm_user=1,
+        set_hist=None,
+        **kwargs,
+    ) -> MultinetResponse[Entry, MultinetError]:
         """
         Synchronously set ADO parameters
 
@@ -203,17 +228,19 @@ class AdoRequest(Request):
         # Override sethistory for call
         if set_hist is not None:
             # Store original sethist state
-            orig_sethist = not cns3.setHistory.storageOff
+            orig_sethist = not adoIf.setHistory.storageOff
             # Set overrride
-            cns3.keepHistory(set_hist)
+            adoIf.keep_history(set_hist)
         # Call ADO set
-        # self._io.set(*entries, ppm_user=ppm_user)
         if isinstance(entries[0], dict):
             values = entries[0].values()
             entries, response = self._parse_entries(entries[0].keys())
             entries = [(*entry, value) for entry, value in zip(entries, values)]
         else:
+            values = [entry[-1] for entry in entries]
+            entries = [entry[:-1] for entry in entries]
             entries, response = self._parse_entries(entries)
+            entries = [(*entry, value) for entry, value in zip(entries, values)]
 
         for ado_name, group in groupby(entries, itemgetter(0)):
             group = list(group)
@@ -221,33 +248,35 @@ class AdoRequest(Request):
             keys = [entry[:-1] for entry in group]
 
             if not handle:
-                response.update(dict.fromkeys(keys, MultinetError("Metadata Not Available")))
+                response.update(
+                    dict.fromkeys(keys, MultinetError("Metadata Not Available"))
+                )
                 continue
 
             metadata = self.get_meta(*keys)
-            _, status = cns3.adoSet(list=[(handle, *rest) for _, *rest in group], ppmIndex=ppm_user - 1)
+            _, status = adoIf.adoSet(
+                list=[(handle, *rest) for _, *rest in group], ppmIndex=ppm_user - 1
+            )
             for entry, st in zip(keys, status):
                 if st != 0:
                     response[entry] = MultinetError(st)
-                else: 
+                else:
                     response[entry] = None
 
         if orig_sethist is not None:
             # Restore original sethist state if stored
-            cns3.keepHistory(orig_sethist)
+            adoIf.keep_history(orig_sethist)
         return response
 
     def cancel_async(self):
-        # self._io.cancel_async()
-        ...
+        adoIf.adoStopAsync()
 
     def set_history(self, enabled):
-        cns3.keepHistory(enabled)
-    
+        adoIf.keep_history(enabled)
 
     def _get_handle(self, name: str):
         if name not in self._handles:
-            self._handles[name] = cns3.CreateAdo(name)
+            self._handles[name] = adoIf.create_ado(name)
         return self._handles[name]
 
 

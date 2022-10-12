@@ -5,10 +5,9 @@ from enum import Enum
 from ipaddress import ip_address, ip_network
 from typing import *
 
-from cad_io import cns3
+from cad_io import adoIf, cns
 
 from .ado_request import AdoRequest
-from .cdev_request import CDEVRequest
 from .http_request import HttpRequest
 from .request import (Callback, Entry, Metadata, MultinetError,
                       MultinetResponse, Request)
@@ -49,12 +48,11 @@ class Multirequest(Request):
     def __init__(self):
         super().__init__()
         self._ado_req = AdoRequest()
-        self._cdev_req = CDEVRequest()
         self._http_req = HttpRequest()
 
         self._requests = {
             EntryType.ADO: self._ado_req,
-            EntryType.CDEV: self._cdev_req,
+            EntryType.CDEV: self._http_req,
             EntryType.HTTP: self._http_req,
         }
 
@@ -82,7 +80,7 @@ class Multirequest(Request):
 
     def clear_metadata(self):
         self._ado_req._io._handles.clear()
-        cns3.metaDataDict.clear()
+        adoIf._metadata_dict.clear()
 
     def get_meta(
             self, *entries, **kwargs
@@ -108,14 +106,14 @@ class Multirequest(Request):
             req.cancel_async()
 
     def _process_entries(self, entries):
+        entries, errors = self._parse_entries(entries)
         results = defaultdict(list)
-        errors: Dict[str, MultinetError] = {}
         for entry in entries:
             device = entry[0]
             if device in self._types:
                 type_ = self._types[device]
             else:
-                cns_entry = cns3.cnslookup(device)
+                cns_entry = cns.cnslookup(device)
                 if cns_entry is None:
                     type_ = None
                 else:
