@@ -1,6 +1,7 @@
 import warnings
 from itertools import groupby
 from operator import itemgetter
+import copy
 from typing import *
 
 from cad_error import RhicError
@@ -173,6 +174,14 @@ class AdoRequest(Request):
         Returns:
             Dict[Entry, Union[MetaData, MultinetError]]: metadata from ADO
         """
+        # first argument is always ADO
+        # third  argument 'should' be value.  If it's the 'valueAndTime', 'valueAndTrigger', or 'timeInfo'
+        # pseudo prop, change it.  If the tuple is != 3, no property was passed so we don't need to redefine.
+        orig_entries = copy.deepcopy(entries)
+        if len(entries[0]) == 3:
+            entries = [(dev, param, prop) if (
+                        prop != None and prop != 'valueAndTime' and prop != 'valueAndTrigger' and prop != 'timeInfo')
+                       else (dev, param, 'value') for (dev, param, prop) in entries]
         entries, response = self._parse_entries(entries)
         for ado_name, group in groupby(entries, itemgetter(0)):
             handle = self._get_handle(ado_name)
@@ -199,7 +208,10 @@ class AdoRequest(Request):
                     if len(entry) == 2:
                         response[entry] = dict(meta[(entry[1], "value")]._asdict())
                     elif len(entry) == 3:
-                        response[entry] = dict(meta[(entry[1], entry[2])]._asdict())
+                        # make sure we use the original requested entry when returning results and not the modified
+                        # entry used to deal with the pseudo props
+                        e = [tup for tup in orig_entries if tup[0] == entry[0] and tup[1] == entry[1]]
+                        response[e[0] if len(e) == 1 else entry] = dict(meta[(entry[1], entry[2])]._asdict())
                 except KeyError:
                     response[entry] = MultinetError("Metadata not available")
         return response
