@@ -1,14 +1,18 @@
+import warnings
 from itertools import groupby
 from operator import itemgetter
 from typing import *
 
-from cad_io import adoIf, cns
+from cad_error import ADOErrors, IOErrors
+from cad_io import adoIf
 
 from .request import (Callback, Entry, Metadata, MultinetError,
                       MultinetResponse, Request)
 
 
 class AdoRequest(Request):
+    _tid_map = {}
+
     def __init__(self):
         super().__init__()
         self._meta = {}
@@ -31,7 +35,6 @@ class AdoRequest(Request):
         callback: Callback,
         *entries: Entry,
         ppm_user=1,
-        timestamp=True,
         immediate=False,
         grouping="ado",
         **kwargs,
@@ -57,7 +60,10 @@ class AdoRequest(Request):
         if not callable(callback):
             raise ValueError("Callback must be callable")
 
-        entries, errs = self._parse_entries(entries)
+        if "timestamp" in kwargs:
+            warnings.warn("'timestamp' keyword argument deprecated; use 'valueAndTime' property instead.", DeprecationWarning)
+
+        entries, errs = self._parse_entries(entries, timestamps=kwargs.get("timestamp", False))
 
         metadata = self.get_meta(*entries)
         # if any of the meta data was not acquired, assume the device/parameter was not valid/available
@@ -85,47 +91,32 @@ class AdoRequest(Request):
             ppm_user = self.default_ppm_user()
         self.logger.debug("args[%d]: %s", len(entries), entries)
 
-        def transform(entries, data, tid, requests, istatus, ppm_index):
-            ppm_user = ppm_index + 1
-            data_iter = iter(data)
-            response = MultinetResponse()
-            for entry, st in zip(entries, status):
-                if st != 0:
-                    response[entry] = MultinetError(st)
-                    continue
-                value = next(data_iter)
-                response[entry] = (
-                    value[0] if metadata[entry]["count"] == 1 else list(value)
-                )
-            response = self._filter_data(response, ppm_user)
-            if response:
-                callback(response, ppm_user)
 
         for group in grouped_entries:
             if immediate:
                 callback(
-                    self.get(*group, ppm_user=ppm_user, timestamp=timestamp), ppm_user
+                    self.get(*group, ppm_user=ppm_user), ppm_user
                 )
             group = list(group)
             ado_name = group[0][0]
             handle = self._get_handle(ado_name)
             if not handle:
                 errs.update(
-                    dict.fromkeys(group, MultinetError("Metadata Not Available"))
+                    dict.fromkeys(group, MultinetError(IOErrors.IO_BAD_NAME))
                 )
                 continue
             tid, status = adoIf.adoGetAsync(
                 list=[(handle, *rest) for _, *rest in group],
                 ppmIndex=ppm_user - 1,
-                callback=lambda args, group=group: transform(group, *args),
+                callback=self._async_callback,
             )
-
+            self._tid_map[tid] = (group, metadata, callback, self)
             for entry, st in zip(group, status):
                 errs[entry] = None if st == 0 else MultinetError(st)
         return errs
 
     def get(
-        self, *entries: Entry, ppm_user=1, timestamp=True, **kwargs
+        self, *entries: Entry, ppm_user=1, **kwargs
     ) -> MultinetResponse[Entry, Any]:
         """
         Get ADO parameters synchronously
@@ -138,7 +129,10 @@ class AdoRequest(Request):
         Returns:
             Dict[Entry, Any]: values from ADO, MultinetError if errors
         """
-        entries, response = self._parse_entries(entries)
+        if "timestamp" in kwargs:
+            warnings.warn("'timestamp' keyword argument deprecated; use 'valueAndTime' property instead.", DeprecationWarning)
+
+        entries, response = self._parse_entries(entries, timestamps=kwargs.get("timestamp", False))
         if ppm_user < 1 or ppm_user > 8:
             ppm_user = self.default_ppm_user()
 
@@ -147,7 +141,7 @@ class AdoRequest(Request):
             handle = self._get_handle(ado_name)
             if not handle:
                 response.update(
-                    dict.fromkeys(group, MultinetError("Metadata Not Available"))
+                    dict.fromkeys(group, MultinetError(IOErrors.IO_BAD_NAME))
                 )
                 continue
             metadata = self.get_meta(*group)
@@ -179,10 +173,14 @@ class AdoRequest(Request):
         Returns:
             Dict[Entry, Union[MetaData, MultinetError]]: metadata from ADO
         """
-        # first argument is always ADO
         entries, response = self._parse_entries(entries)
         for ado_name, group in groupby(entries, itemgetter(0)):
             handle = self._get_handle(ado_name)
+            if not handle:
+                response.update(
+                    dict.fromkeys(group, MultinetError(IOErrors.IO_BAD_NAME))
+                )
+                continue
             meta, st = adoIf.adoMetaData(handle)
             for entry in group:
                 if not meta:
@@ -231,17 +229,8 @@ class AdoRequest(Request):
             orig_sethist = not adoIf.setHistory.storageOff
             # Set overrride
             adoIf.keep_history(set_hist)
-        # Call ADO set
-        if isinstance(entries[0], dict):
-            values = entries[0].values()
-            entries, response = self._parse_entries(entries[0].keys())
-            entries = [(*entry, value) for entry, value in zip(entries, values)]
-        else:
-            values = [entry[-1] for entry in entries]
-            entries = [entry[:-1] for entry in entries]
-            entries, response = self._parse_entries(entries)
-            entries = [(*entry, value) for entry, value in zip(entries, values)]
 
+        entries, response = self._parse_sets(entries)
         for ado_name, group in groupby(entries, itemgetter(0)):
             group = list(group)
             handle = self._get_handle(ado_name)
@@ -249,7 +238,7 @@ class AdoRequest(Request):
 
             if not handle:
                 response.update(
-                    dict.fromkeys(keys, MultinetError("Metadata Not Available"))
+                    dict.fromkeys(group, MultinetError(IOErrors.IO_BAD_NAME))
                 )
                 continue
 
@@ -278,6 +267,30 @@ class AdoRequest(Request):
         if name not in self._handles:
             self._handles[name] = adoIf.create_ado(name)
         return self._handles[name]
+
+    @classmethod
+    def _async_callback(cls, arg):
+        data, tid, requests, istatus, ppm_index = arg
+        entries, metadata, callback, inst = cls._tid_map.get(tid, (None, None, None))
+        if entries is None:
+            # TODO: Race condition?
+            return
+
+        ppm_user = ppm_index + 1
+        data_iter = iter(data)
+        response = MultinetResponse()
+        for entry, st in zip(entries, istatus):
+            if st != 0:
+                response[entry] = MultinetError(st)
+                continue
+            value = next(data_iter)
+            response[entry] = (
+                value[0] if metadata[entry]["count"] == 1 else list(value)
+            )
+        response = inst._filter_data(response, ppm_user)
+        if response:
+            callback(response, ppm_user)
+
 
 
 if __name__ == "__main__":

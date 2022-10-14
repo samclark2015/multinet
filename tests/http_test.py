@@ -3,6 +3,7 @@ from threading import Condition
 
 import pytest
 from cad_io.adoaccess import IORequest
+from multinet.ado_request import AdoRequest
 from multinet.http_request import HttpRequest
 
 
@@ -12,18 +13,18 @@ def req():
 
 
 @pytest.fixture(scope="module")
-def pyado2():
-    return IORequest()
+def ado_req():
+    return AdoRequest()
 
 
-def test_set(req: HttpRequest, pyado2: IORequest):
+def test_set(req: HttpRequest, ado_req: IORequest):
     res = req.set(("simple.test", "intS", 7))
     assert not res, "HTTP Request failed"
-    real_res = pyado2.get(("simple.test", "intS"))
-    assert real_res[("simple.test", "intS")]["value"] == 7, "Value mismatch with pyado2"
+    real_res = ado_req.get(("simple.test", "intS"))
+    assert real_res[("simple.test", "intS")] == 7, "Value mismatch with pyado2"
 
 
-def test_multiset(req: HttpRequest, pyado2: IORequest):
+def test_multiset(req: HttpRequest, ado_req: IORequest):
     res = req.set(
         ("simple.test", "intS", 7),
         ("simple.test", "floatS", 3.14),
@@ -31,7 +32,7 @@ def test_multiset(req: HttpRequest, pyado2: IORequest):
     )
     assert not res, "HTTP Request failed"
     assert (
-        pyado2.get(("simple.test", "intS"))[("simple.test", "intS")]["value"] == 7
+        ado_req.get(("simple.test", "intS"))[("simple.test", "intS")] == 7
     ), "Value mismatch with pyado2"
 
 

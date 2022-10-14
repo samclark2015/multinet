@@ -93,6 +93,7 @@ class Multirequest(Request):
         return MultinetResponse(results)
 
     def set(self, *entries: Entry, **kwargs) -> Dict[Entry, MultinetError]:
+        entries, errors = self._parse_sets(entries)
         entries, errors = self._process_entries(entries)
         for type_ in entries:
             request = self._requests[type_]

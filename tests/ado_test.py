@@ -3,6 +3,7 @@ from threading import Condition, Event, Thread
 from time import sleep
 
 import pytest
+from cad_error import ADOErrors
 from multinet import filters
 from multinet.ado_request import AdoRequest
 from multinet.request import MultinetResponse
@@ -54,7 +55,7 @@ def test_get_async(req: AdoRequest):
     req.cancel_async()
 
 
-def test_get_async_filter(req):
+def test_get_async_filter(req: AdoRequest):
     set_vals = [1, 2, 2, 3, 4]
     keys = [("simple.test", "intS")]
     counter = 0
@@ -103,3 +104,7 @@ def test_set(req: AdoRequest):
     sleep(1)
     assert val1 == 254
     assert req.set(("simple.test", "intS", val)).get_status("simple.test:intS") == 0
+
+def test_set_wrong_type(req: AdoRequest):
+    err = req.set({"simple.test:longS": "bad value"})
+    assert err.get_status("simple.test:longS") == ADOErrors.ADO_WRONG_TYPE

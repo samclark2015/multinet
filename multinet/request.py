@@ -8,10 +8,6 @@ from functools import partial
 from typing import *
 
 Entry = tuple
-Metadata = Dict[str, Any]
-Callback = Callable[[Dict[Entry, Any], int], None]
-Filter = Callable[[Dict[Entry, Any], int], Dict[Entry, Any]]
-
 
 class MultinetResponse(UserDict):
     def get_error(self, key: Entry):
@@ -22,11 +18,10 @@ class MultinetResponse(UserDict):
             return exc
 
     def get_status(self, key: Entry):
-        try:
-            self[key]
+            val = self[key]
+            if isinstance(val, MultinetError):
+                return val.rhic_code
             return 0
-        except MultinetError as exc:
-            return exc.error_code
 
     def get_errors(self):
         return {
@@ -100,7 +95,11 @@ class MultinetError(Exception):
     def __init__(self, err):
         # err_string = getErrorString(err) if isinstance(err, int) else err
         super().__init__(err)
+        self.rhic_code = err
 
+Metadata = MultinetResponse[str, Any]
+Callback = Callable[[MultinetResponse[Entry, Any], int], None]
+Filter = Callable[[MultinetResponse[Entry, Any], int], Dict[Entry, Any]]
 
 class Request(ABC):
     """Request interface"""
@@ -114,7 +113,7 @@ class Request(ABC):
         self._name = None
 
     @abstractmethod
-    def get(self, *entries: Entry, ppm_user=1, **kwargs) -> Dict[Entry, Any]:
+    def get(self, *entries: Entry, ppm_user=1, **kwargs) -> MultinetResponse[Entry, Any]:
         """Get data from device synchronously
 
         Arguments:
@@ -128,7 +127,7 @@ class Request(ABC):
     @abstractmethod
     def get_async(
         self, callback: Callback, *entries: Entry, immediate=False, ppm_user=1, **kwargs
-    ) -> Dict[Entry, MultinetError]:
+    ) -> MultinetResponse[Entry, MultinetError]:
         """Get data from device asynchronously
 
         Arguments:
@@ -138,14 +137,13 @@ class Request(ABC):
         Keyword Arguments:
             immediate (bool): should callback be called immediately after get_async (default: False)
             ppm_user (int): which PPM user to listen for asynchronous data on (default: 1)
-            timestamp(bool): include timestamp properties (ADOs only) (default: True)
         """
         ...
 
     @abstractmethod
     def get_meta(
         self, *entries: Entry, ppm_user=1, **kwargs
-    ) -> Dict[Entry, Union[Metadata, MultinetError]]:
+    ) -> MultinetResponse[Entry, Union[Metadata, MultinetError]]:
         """Get metadata for entries
 
         Arguments:
@@ -159,7 +157,7 @@ class Request(ABC):
     @abstractmethod
     def set(
         self, *entries: Entry, ppm_user=1, set_hist: Optional[bool] = None, **kwargs
-    ) -> Dict[Entry, MultinetError]:
+    ) -> MultinetResponse[Entry, MultinetError]:
         """Set data
 
         Arguments:
@@ -249,7 +247,7 @@ class Request(ABC):
             data = filter_(data, ppm_user)
         return data
 
-    def _parse_entries(self, entries: Iterable[Entry]):
+    def _parse_entries(self, entries: Iterable[Entry], timestamps=False):
         ret = []
         errors = {}
         for entry in entries:
@@ -269,7 +267,7 @@ class Request(ABC):
 
             entry = cast(Tuple[str, str, str], entry)
             # Check for psuedo properties & convert as needed
-            if entry[2] == "valueAndTime":
+            if entry[2] == "valueAndTime" or (entry[2] == "value" and timestamps):
                 ret += [
                     (entry[0], entry[1], "value"),
                     (entry[0], entry[1], "timestampSeconds"),
@@ -281,6 +279,25 @@ class Request(ABC):
                 ret.append(entry)
 
         return ret, MultinetResponse(errors)
+
+    def _parse_sets(self, entries: Iterable[Entry]):
+        parsed_entries = []
+        errs = MultinetResponse()
+        for entry in entries:
+            # Call ADO set
+            if isinstance(entry, dict):
+                these_entries, response = self._parse_entries(entry.keys())
+                these_values = entry.values()
+                parsed_entries += [(*entry, value) for entry, value in zip(these_entries, these_values)]
+                errs.update(response)
+            else:
+                these_entries = [entry[:-1] for entry in entries]
+                these_values = [entry[-1] for entry in entries]
+                these_entries, response = self._parse_entries(these_entries)
+                parsed_entries += [(*entry, value) for entry, value in zip(these_entries, these_values)]
+                errs.update(response)
+        return parsed_entries, errs
+
 
     ### Private magic-methods for Pythonicness ###
     # __enter__ and __exit__ define context manager (with ...: ...) functionality
