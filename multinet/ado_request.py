@@ -3,7 +3,7 @@ from itertools import groupby
 from operator import itemgetter
 from typing import *
 
-from cad_error import RhicErrors
+from cad_error import RhicError
 from cad_io import adoIf
 
 from .request import (Callback, Entry, Metadata, MultinetError,
@@ -102,7 +102,7 @@ class AdoRequest(Request):
             handle = self._get_handle(ado_name)
             if not handle:
                 errs.update(
-                    dict.fromkeys(group, MultinetError(RhicErrors.IO_BAD_NAME))
+                    dict.fromkeys(group, MultinetError(RhicError.IO_BAD_NAME))
                 )
                 continue
             tid, status = adoIf.adoGetAsync(
@@ -141,7 +141,7 @@ class AdoRequest(Request):
             handle = self._get_handle(ado_name)
             if not handle:
                 response.update(
-                    dict.fromkeys(group, MultinetError(RhicErrors.IO_BAD_NAME))
+                    dict.fromkeys(group, MultinetError(RhicError.IO_BAD_NAME))
                 )
                 continue
             metadata = self.get_meta(*group)
@@ -178,7 +178,7 @@ class AdoRequest(Request):
             handle = self._get_handle(ado_name)
             if not handle:
                 response.update(
-                    dict.fromkeys(group, MultinetError(RhicErrors.IO_BAD_NAME))
+                    dict.fromkeys(group, MultinetError(RhicError.IO_BAD_NAME))
                 )
                 continue
             meta, st = adoIf.adoMetaData(handle)
@@ -239,7 +239,7 @@ class AdoRequest(Request):
 
             if not handle:
                 response.update(
-                    dict.fromkeys(group, MultinetError(RhicErrors.IO_BAD_NAME))
+                    dict.fromkeys(group, MultinetError(RhicError.IO_BAD_NAME))
                 )
                 continue
 
