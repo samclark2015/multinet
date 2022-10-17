@@ -1,13 +1,13 @@
 import logging
 import re
 import traceback
-import warnings
 from abc import ABC, abstractmethod
 from collections import UserDict
 from functools import partial
 from typing import *
 
 Entry = tuple
+
 
 class MultinetResponse(UserDict):
     def get_error(self, key: Entry):
@@ -18,10 +18,10 @@ class MultinetResponse(UserDict):
             return exc
 
     def get_status(self, key: Entry):
-            val = self[key]
-            if isinstance(val, MultinetError):
-                return val.rhic_code
-            return 0
+        val = self[key]
+        if isinstance(val, MultinetError):
+            return val.rhic_code
+        return 0
 
     def get_errors(self):
         return {
@@ -97,9 +97,11 @@ class MultinetError(Exception):
         super().__init__(err)
         self.rhic_code = err
 
+
 Metadata = MultinetResponse[str, Any]
 Callback = Callable[[MultinetResponse[Entry, Any], int], None]
 Filter = Callable[[MultinetResponse[Entry, Any], int], Dict[Entry, Any]]
+
 
 class Request(ABC):
     """Request interface"""
@@ -113,7 +115,9 @@ class Request(ABC):
         self._name = None
 
     @abstractmethod
-    def get(self, *entries: Entry, ppm_user=1, **kwargs) -> MultinetResponse[Entry, Any]:
+    def get(
+        self, *entries: Entry, ppm_user=1, **kwargs
+    ) -> MultinetResponse[Entry, Any]:
         """Get data from device synchronously
 
         Arguments:
@@ -288,16 +292,19 @@ class Request(ABC):
             if isinstance(entry, dict):
                 these_entries, response = self._parse_entries(entry.keys())
                 these_values = entry.values()
-                parsed_entries += [(*entry, value) for entry, value in zip(these_entries, these_values)]
+                parsed_entries += [
+                    (*entry, value) for entry, value in zip(these_entries, these_values)
+                ]
                 errs.update(response)
             else:
                 these_entries = [entry[:-1] for entry in entries]
                 these_values = [entry[-1] for entry in entries]
                 these_entries, response = self._parse_entries(these_entries)
-                parsed_entries += [(*entry, value) for entry, value in zip(these_entries, these_values)]
+                parsed_entries += [
+                    (*entry, value) for entry, value in zip(these_entries, these_values)
+                ]
                 errs.update(response)
         return parsed_entries, errs
-
 
     ### Private magic-methods for Pythonicness ###
     # __enter__ and __exit__ define context manager (with ...: ...) functionality
