@@ -1,13 +1,13 @@
+import copy
 import warnings
 from itertools import groupby
 from operator import itemgetter
-import copy
 from typing import *
 
 from cad_error import RhicError
 from cad_io import adoIf
 
-from .request import (Callback, Entry, Metadata, MultinetError,
+from .request import (AsyncID, Callback, Entry, Metadata, MultinetError,
                       MultinetResponse, Request)
 
 
@@ -18,6 +18,7 @@ class AdoRequest(Request):
         super().__init__()
         self._meta = {}
         self._handles = {}
+        self._async_id_map: Dict[AsyncID, List[int]] = {}
 
     def default_ppm_user(self):
         try:
@@ -64,7 +65,7 @@ class AdoRequest(Request):
         if "timestamp" in kwargs:
             warnings.warn("'timestamp' keyword argument deprecated; use 'valueAndTime' property instead.", DeprecationWarning)
 
-        entries, errs = self._parse_entries(entries, timestamps=kwargs.get("timestamp", False))
+        entries, response = self._parse_entries(entries, timestamps=kwargs.get("timestamp", False))
 
         metadata = self.get_meta(*entries)
         # if any of the meta data was not acquired, assume the device/parameter was not valid/available
@@ -72,7 +73,7 @@ class AdoRequest(Request):
         for dev, value in metadata.items():
             if isinstance(value, MultinetError):
                 entries.remove(dev)
-                errs[dev] = value
+                response[dev] = value
         self._meta.update(metadata)
 
         if grouping == "ado":
@@ -92,7 +93,8 @@ class AdoRequest(Request):
             ppm_user = self.default_ppm_user()
         self.logger.debug("args[%d]: %s", len(entries), entries)
 
-
+        async_id = next(self._mreq_tid_iter)
+        io_tids = []
         for group in grouped_entries:
             if immediate:
                 callback(
@@ -102,7 +104,7 @@ class AdoRequest(Request):
             ado_name = group[0][0]
             handle = self._get_handle(ado_name)
             if not handle:
-                errs.update(
+                response.update(
                     dict.fromkeys(group, MultinetError(RhicError.IO_BAD_NAME))
                 )
                 continue
@@ -112,9 +114,13 @@ class AdoRequest(Request):
                 callback=self._async_callback,
             )
             self._tid_map[tid] = (group, metadata, callback, self)
+            io_tids.append(tid)
             for entry, st in zip(group, status):
-                errs[entry] = None if st == 0 else MultinetError(st)
-        return errs
+                response[entry] = None if st == 0 else MultinetError(st)
+                
+        self._async_id_map[async_id] = io_tids
+        response.tid = async_id
+        return response
 
     def get(
         self, *entries: Entry, ppm_user=1, **kwargs
@@ -155,6 +161,9 @@ class AdoRequest(Request):
                     response[entry] = MultinetError(st)
                     continue
                 value = next(data_iter)
+                if value is None:
+                    response[entry] = value
+                    continue
                 response[entry] = (
                     value[0] if metadata[entry]["count"] == 1 else list(value)
                 )
@@ -270,8 +279,35 @@ class AdoRequest(Request):
             adoIf.keep_history(orig_sethist)
         return response
 
-    def cancel_async(self):
-        adoIf.adoStopAsync()
+    def cancel_async(self, async_id: Union[MultinetResponse, AsyncID]=None):
+        """Cancels active asyncs.
+
+        Args:
+            async_id (Union[MultinetResponse, AsyncID], optional): ID or response from `get_async()` call. Defaults to None.
+
+        Raises:
+            ValueError: Raised when async_id is MultinetResponse and was not returned from a `get_async()` call.
+            TypeError: Raised when async_id is neither MultinetResponse nor AsyncID.
+        """
+        
+        if isinstance(async_id, MultinetResponse):
+            if async_id.tid is None:
+                raise ValueError("MultinetResponse passed was not an async response")
+            tid = async_id.tid
+        elif isinstance(async_id, AsyncID):
+            tid = async_id
+        elif async_id is not None:
+            raise TypeError("mreq_response must be of type MultinetResponse or AsyncID")
+
+        if async_id is None:
+            tids = [tid for tids in self._async_id_map.values() for tid in tids]
+            self._async_id_map.clear()
+        else:
+            tids = self._async_id_map[async_id]
+            del self._async_id_map[async_id]
+
+        for tid in tids:
+            adoIf.adoStopAsync(tid=tid)
 
     def set_history(self, enabled):
         adoIf.keep_history(enabled)

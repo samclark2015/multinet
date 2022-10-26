@@ -1,15 +1,21 @@
+import itertools
 import logging
 import re
 import traceback
 from abc import ABC, abstractmethod
 from collections import UserDict
-from functools import partial
+from functools import partial, wraps
 from typing import *
 
 Entry = tuple
-
+AsyncID = int
 
 class MultinetResponse(UserDict):
+    @wraps(UserDict.__init__)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.tid: Optional[AsyncID] = None
+
     def get_error(self, key: Entry):
         try:
             self[key]
@@ -96,6 +102,7 @@ class MultinetError(Exception):
         # err_string = getErrorString(err) if isinstance(err, int) else err
         super().__init__(err)
         self.rhic_code = err
+        MultinetResponse()
 
 
 Metadata = MultinetResponse[str, Any]
@@ -107,7 +114,8 @@ class Request(ABC):
     """Request interface"""
 
     logger = property(lambda self: logging.getLogger(self.__class__.__name__))
-
+    _mreq_tid_iter = itertools.count()
+    
     def __init__(self):
         self._filters: List[Filter] = list()
         self._instance = None

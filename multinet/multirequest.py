@@ -105,15 +105,15 @@ class Multirequest(Request):
     def get_async(
             self, callback: Callback, *entries: Entry, **kwargs
     ) -> Dict[Entry, MultinetError]:
-        entries, errors = self._process_entries(entries)
+        entries, response = self._process_entries(entries)
         for type_ in entries:
             request = self._requests[type_]
             try:
-                err = request.get_async(callback, *entries[type_], **kwargs)
+                result = request.get_async(callback, *entries[type_], **kwargs)
             except Exception as e:
                 self.logger.debug(str(e))
-            errors.update(err)
-        return MultinetResponse(errors)
+            response.update(result)
+        return MultinetResponse(response)
 
     def set_history(self, enabled):
         for req in self._requests.values():
