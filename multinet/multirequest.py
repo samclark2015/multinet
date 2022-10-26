@@ -110,9 +110,9 @@ class Multirequest(Request):
             request = self._requests[type_]
             try:
                 result = request.get_async(callback, *entries[type_], **kwargs)
+                response.update(result)
             except Exception as e:
                 self.logger.debug(str(e))
-            response.update(result)
         return MultinetResponse(response)
 
     def set_history(self, enabled):
