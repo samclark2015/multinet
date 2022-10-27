@@ -38,7 +38,7 @@ class AdoRequest(Request):
         *entries: Entry,
         ppm_user=1,
         immediate=False,
-        grouping="ado",
+        grouping="parameter",
         **kwargs,
     ) -> MultinetResponse[Entry, MultinetError]:
         """
@@ -53,8 +53,8 @@ class AdoRequest(Request):
             grouping: str; how async data should be reported (default "individual")
                 Grouping choices:
                 "ado": every parameter on the same ADO is reported at the same time
-                "parameter": every property on the same parameter is reported at the same time
-                "individual" (default): each passed parameter/property is reported individually
+                "parameter" (default): every property on the same parameter is reported at the same time
+                "individual": each passed parameter/property is reported individually
 
         Returns:
             dict: Any errors (empty means success)
