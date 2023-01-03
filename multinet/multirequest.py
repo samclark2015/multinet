@@ -42,44 +42,6 @@ class EntryType(Enum):
             return cls.HTTP
 
 
-# Helper function to return the string representation of a feature_bit value
-def feature_str(feature_bits) -> str:
-    fd = {'READABLE': 'R', 'WRITABLE': 'W', 'DISCRETE': 'D' \
-        , 'ARCHIVABLE': 'A', 'EDITABLE': 'E', 'CONFIGURATION': 'C' \
-        , 'SAVABLE': 'S', 'DIAGNOSTIC': 'I'}
-    feature_str = ''
-    CNS_features = dict(vars(cns3.Feature))
-    for i in fd:
-        v = CNS_features[i]
-        if feature_bits & v:
-            feature_str += i.title()
-            feature_str += ', '
-    feature_str = feature_str[0:-2] if ', ' in feature_str else feature_str
-    return feature_str
-
-# Helper function to return category name - this support was replaced by feature bits but
-# is included for convenience and backwards compatibility but should not be needed in general
-def category_for_features(feature_bits) -> str:
-    if feature_bits & cns3.Feature.CONFIGURATION:
-        return "configData"
-    elif feature_bits & cns3.Feature.DIAGNOSTIC:
-        return "diagData"
-    elif (feature_bits & cns3.Feature.DISCRETE) and (feature_bits & cns3.Feature.WRITABLE) and \
-            (feature_bits & cns3.Feature.READABLE):
-        return "discSetting"
-    elif (feature_bits & cns3.Feature.WRITABLE) and (feature_bits & cns3.Feature.READABLE):
-        return "contSetting"
-    elif (feature_bits & cns3.Feature.DISCRETE) and (feature_bits & cns3.Feature.READABLE):
-        return "discMeas"
-    elif feature_bits & cns3.Feature.READABLE:
-        return "contMeas"
-    elif (feature_bits & cns3.Feature.DISCRETE) and (feature_bits & cns3.Feature.WRITABLE):
-        return "discAction"
-    elif feature_bits & cns3.Feature.WRITABLE:
-        return "contAction"
-    else:
-        return "unknownCategory"
-
 class Multirequest(Request):
     _types: Dict[str, EntryType] = dict()
 
@@ -185,20 +147,22 @@ if __name__ == "__main__":
     import time
 
     req = Multirequest()
-    data = req.get(("simple.test", "longArrayS"), ("simple.test", "stringS"), ppm_user=1)
-    print(data)
-    data = req.get(("simple.test", "floatArrayS"))
-    print(data)
-    data = req.get(("simple.test", "stringS"), ppm_user=3)
-    print(data)
-    data = req.get(("simple.test", "degM"))
-    print(50 * "-")
-    req.get_async(cb, ("simple.test", "degM"), ("simple.test", "sinM"), ("simple.test", "varArrayS"),
-                  ("simple.test", "stringS"), immediate=True, ppm_user=3)
-    timeout(4)
-    req.cancel_async()
+    req.set(("simple.test", "stringS", "Hello"))
 
-    print(50 * "-")
-    req.get_async(cb, ("simple.test", "stringS"), immediate=True, ppm_user=5)
-    timeout(2)
-    req.cancel_async()
+    # data = req.get(("simple.test", "longArrayS"), ("simple.test", "stringS"), ppm_user=1)
+    # print(data)
+    # data = req.get(("simple.test", "floatArrayS"))
+    # print(data)
+    # data = req.get(("simple.test", "stringS"), ppm_user=3)
+    # print(data)
+    # data = req.get(("simple.test", "degM"))
+    # print(50 * "-")
+    # req.get_async(cb, ("simple.test", "degM"), ("simple.test", "sinM"), ("simple.test", "varArrayS"),
+    #              ("simple.test", "stringS"), immediate=True, ppm_user=3)
+    # timeout(4)
+    # req.cancel_async()
+
+    # print(50 * "-")
+    # req.get_async(cb, ("simple.test", "stringS"), immediate=True, ppm_user=5)
+    # timeout(2)
+    # req.cancel_async()
