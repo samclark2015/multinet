@@ -120,7 +120,7 @@ class Multirequest(Request):
             req.set_history(enabled)
 
     def clear_metadata(self):
-        self._ado_req._io._handles.clear()
+        self._ado_req._handles.clear()
         adoIf._metadata_dict.clear()
 
     def get_meta(
