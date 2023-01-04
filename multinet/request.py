@@ -278,13 +278,13 @@ class Request(ABC):
             enabled (bool): Enabled or not
         """
 
-    def add_filter(self, filter_: Filter):
+    def add_filter(self, filter: Filter):
         """Add filter for asynchronous requests
 
         Arguments:
-            filter_ (Filter): filter function
+            filter (Filter): filter function
         """
-        self._filters.append(filter_)
+        self._filters.append(filter)
 
     def start_asyncs(self):
         """Start serving async data, handled by @async_handler(...) decorated functions"""

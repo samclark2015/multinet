@@ -154,10 +154,6 @@ class HttpRequest(Request):
         timestamp=True,
         **kwargs,
     ) -> Dict[Entry, MultinetError]:
-        """Asynchronous get.
-        The user defined function callback(*args) will be called
-        when any parameter in the list have been changed.
-        """
         entries, data = self._parse_entries(entries)
         names, props = self._unpack_args(*entries)
         payload = {"names": names, "props": props, "ppmuser": ppm_user}
