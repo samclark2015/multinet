@@ -1,17 +1,4 @@
-from multinet import Multirequest
+from multinet import AdoRequest
 
-# Creating request
-request = Multirequest()
-
-# Sync get
-data = request.get(("simple.test", "degM"))
-degM = data[("simple.test", "degM")]
-
-# Fancy async
-@request.async_handler(("simple.test", "sinM"))
-def handle_sinM(data, ppm_user):
-    print(data, ppm_user)
-
-request.start_asyncs()
-
-
+io = AdoRequest()
+io.set(("simple.test", "intS", 123), ("simple.test", "stringS", "hello"))

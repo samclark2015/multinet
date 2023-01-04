@@ -10,6 +10,14 @@ To install into an active virtual environment, add `multinet` to your production
 
 ## Usage
 
+ADO/Parameter/Property combos, a.k.a. "Entries" in Multinet, can be specified in two ways:
+- Tuples: a 2- or 3-tuple can specify an entry, e.g. `("simple.test", "sinM")` or `("simple.test", "intS", "timestampSeconds")`
+- Strings: a colon-separated string can specify an entry, e.g. `"simple.test:sinM"` or `"simple.test:intS:timestampSeconds"`
+  
+These two Entry forms can be used interchangeably throughout Multinet.
+
+
+### Example Usage
 ```python
 from multinet import Multirequest
 
@@ -31,11 +39,7 @@ request.get_async(callback, ("simple.test", "sinM"), ("simple.cdev", "degM"))
 request.set(("simple.test", "intS", 7), ("simple.cdev", "doubleS", 3.14))
 ```
 
-**Note:** Device entries in Multinet are specified as tuples.  
 
-For `get()` and `get_async()` requests, this is a 2- or 3-tuple consisting of `(device/ADO, parameter, [property])`.  
-For `set()` requests, this is a 3- or 4-tuple consisting of `(device/ADO, parameter, [property], value)`.  
-Where `[]` is optional.
 
 These entries are passed in as positional arguments as seen above. Alternately, a list of entries can be passed using the "spreading" (`*`) operator:
 

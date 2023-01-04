@@ -305,8 +305,8 @@ class Request(ABC):
                 ]
                 errs.update(response)
             else:
-                these_entries = [entry[:-1] for entry in entries]
-                these_values = [entry[-1] for entry in entries]
+                these_entries = [entry[:-1]]
+                these_values = [entry[-1]]
                 these_entries, response = self._parse_entries(these_entries)
                 parsed_entries += [
                     (*entry, value) for entry, value in zip(these_entries, these_values)
