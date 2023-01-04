@@ -4,3 +4,4 @@ from .multirequest import Multirequest
 from .request import MultinetError
 
 __all__ = ["Multirequest", "AdoRequest", "HttpRequest", "MultinetError"]
+__docformat__ = "google"

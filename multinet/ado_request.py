@@ -41,24 +41,6 @@ class AdoRequest(Request):
         grouping="parameter",
         **kwargs,
     ) -> MultinetResponse[Entry, MultinetError]:
-        """
-        Get ADO parameters asynchronously
-
-        Arguments:
-                callback: Callable object taking arguments results_dict, ppm_user
-                args: One or more tuple(<ado>, <parameter>, [property]); property defaults to 'value'
-                ppm_user: int; PPM User 1 - 8 (default 1)
-                timestamp: boolean; should timestamps be included (default True)
-                immediate: boolean; should an initial get be performed immediately (default False)
-            grouping: str; how async data should be reported (default "individual")
-                Grouping choices:
-                "ado": every parameter on the same ADO is reported at the same time
-                "parameter" (default): every property on the same parameter is reported at the same time
-                "individual": each passed parameter/property is reported individually
-
-        Returns:
-            dict: Any errors (empty means success)
-        """
         if not callable(callback):
             raise ValueError("Callback must be callable")
 
@@ -125,17 +107,6 @@ class AdoRequest(Request):
     def get(
         self, *entries: Entry, ppm_user=1, **kwargs
     ) -> MultinetResponse[Entry, Any]:
-        """
-        Get ADO parameters synchronously
-
-        Arguments:
-                args: One or more tuple(<ado_name>, <parameter_name>, [property_name]); property_name defaults to 'value'
-                timestamp: boolean; should timestamps be included (default True)
-                ppm_user: int; PPM User 1 - 8 (default 1)
-
-        Returns:
-            Dict[Entry, Any]: values from ADO, MultinetError if errors
-        """
         if "timestamp" in kwargs:
             warnings.warn("'timestamp' keyword argument deprecated; use 'valueAndTime' property instead.", DeprecationWarning)
 
@@ -172,17 +143,6 @@ class AdoRequest(Request):
     def get_meta(
         self, *entries: Entry, **kwargs
     ) -> MultinetResponse[Entry, Union[Metadata, MultinetError]]:
-        """
-        Get metadata for ado
-
-        Arguments:
-                ado: Name of ADO; returns list of parameters
-                param: Name of parameter (optional); returns list of properties & values
-                all: Returns dict of all parameters, properties, and values (optional)
-
-        Returns:
-            Dict[Entry, Union[MetaData, MultinetError]]: metadata from ADO
-        """
         # first argument is always ADO
         # third  argument 'should' be value.  If it's the 'valueAndTime', 'valueAndTrigger', or 'timeInfo'
         # pseudo prop, change it.  If the tuple is != 3, no property was passed so we don't need to redefine.
@@ -232,16 +192,6 @@ class AdoRequest(Request):
         set_hist=None,
         **kwargs,
     ) -> MultinetResponse[Entry, MultinetError]:
-        """
-        Synchronously set ADO parameters
-
-        Arguments:
-                args: One or more tuple(<ado_name>, <parameter_name>, [property_name], <value>); property_name defaults to 'value'
-                ppm_user (int): PPM User 1 - 8 (default 1)
-
-        Returns:
-            bool: True if successful
-        """
         if ppm_user < 1 or ppm_user > 8:
             ppm_user = self.default_ppm_user()
         orig_sethist = None
@@ -310,6 +260,11 @@ class AdoRequest(Request):
             adoIf.adoStopAsync(tid=tid)
 
     def set_history(self, enabled):
+        """Enable or disable set history
+
+        Args:
+            enabled (bool): Enable set history if True, else disable
+        """
         adoIf.keep_history(enabled)
 
     def _get_handle(self, name: str):

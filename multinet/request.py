@@ -1,3 +1,7 @@
+"""
+Contains generic interfaces and classes for the Multinet package
+"""
+
 import itertools
 import logging
 import re
@@ -7,36 +11,77 @@ from collections import UserDict
 from functools import partial, wraps
 from typing import *
 
-Entry = tuple
+from cad_error import RhicError
+
+Entry = Union[Tuple[str, str], Tuple[str, str, str], str]
+"""Entry type alias"""
 AsyncID = int
+"""Async ID type alias"""
 
 class MultinetResponse(UserDict):
     @wraps(UserDict.__init__)
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.tid: Optional[AsyncID] = None
+        """TID associated with this Multinet request
 
-    def get_error(self, key: Entry):
+        Used with `AdoRequest.cancel_async` to cancel individual requests
+        """
+
+    def get_error(self, key: Entry) -> Optional["MultinetError"]:
+        """Returns RhicError associated with entry, if it exists
+
+        Args:
+            key (Entry): Key to retreive error
+
+        Returns:
+            Optional[MultinetError]: Error, if present
+        """
         try:
             self[key]
             return None
         except MultinetError as exc:
             return exc
 
-    def get_status(self, key: Entry):
+    def get_status(self, key: Entry) -> RhicError:
+        """Returns Rhic error code for entry
+
+        Args:
+            key (Entry): Key to retreive error for
+
+        Returns:
+            RhicError: Error code
+        """
         val = self[key]
         if isinstance(val, MultinetError):
             return val.rhic_code
-        return 0
+        return RhicError.SUCCESS
 
-    def get_errors(self):
+    def get_errors(self) -> Dict[Entry, Optional["MultinetError"]]:
+        """Returns dictionary of errors
+
+        Returns:
+            Dict[Entry, Optional[MultinetError]]: Dictionary of multinet errors
+        """
         return {
-            k: self.get(k, False)
+            k: self.get(k, None)
             for k in self
-            if isinstance(self.get(k, False), MultinetError)
         }
 
-    def get(self, key: Entry, should_raise=True):
+    def get(self, key: Entry, should_raise=True) -> Union[Any, "MultinetError"]:
+        """Return value for entry
+
+        Args:
+            key (Entry): Entry to get 
+            should_raise (bool): Raise error if exists, otherwise return error
+
+        Returns:
+            Union[Any, MultinetError]: Value or error for entry
+
+        Raises:
+            MultinetError: When `should_raise` is True, and a Multinet error exists for entry
+            KeyError: Entry does not exists in response
+        """
         try:
             return super().get(key)
         except MultinetError as exc:
@@ -98,17 +143,41 @@ class MultinetResponse(UserDict):
 
 
 class MultinetError(Exception):
+    """Base class for Multinet errors
+
+    Attributes:
+        rhic_code (RhicError): Rhic error code, if available
+    """
     def __init__(self, err):
-        # err_string = getErrorString(err) if isinstance(err, int) else err
         super().__init__(err)
         self.rhic_code = err
-        MultinetResponse()
 
 
 Metadata = MultinetResponse[str, Any]
-Callback = Callable[[MultinetResponse[Entry, Any], int], None]
-Filter = Callable[[MultinetResponse[Entry, Any], int], Dict[Entry, Any]]
+"""Metadata dictionary type alias
 
+`MultinetResponse[str, any]`
+"""
+Callback = Callable[[MultinetResponse[Entry, Any], int], None]
+"""Callback function type alias
+
+`Callable[[MultinetResponse[Entry, Any], int], None]`
+
+Example::
+
+    def callback(data: MultinetResponse[Entry, Any], ppm_user: int) -> None:
+        ...
+"""
+Filter = Callable[[MultinetResponse[Entry, Any], int], MultinetResponse[Entry, Any]]
+"""Filter function type alias
+
+`Callable[[MultinetResponse[Entry, Any], int], Dict[Entry, Any]]`
+
+Example::
+
+    def filter(data: MultinetResponse[Entry, Any], ppm_user: int) -> MultinetResponse[Entry, Any]:
+        ...
+"""
 
 class Request(ABC):
     """Request interface"""
@@ -130,9 +199,12 @@ class Request(ABC):
 
         Arguments:
             *entries (Entry): Entries, in form of (<device>, <param>, <prop>)
+            ppm_user (int): PPM user for get request
+            **kwargs: Additional arguments for protocol-specific requests
 
         Returns:
-            Dict[Entry, Any]: Dictionary of return values
+            MultinetResponse[Entry, Any]: Return values
+
         """
         ...
 
@@ -143,12 +215,20 @@ class Request(ABC):
         """Get data from device asynchronously
 
         Arguments:
-            callback (Callable[[Dict[Entry, Any]], None]): callback with arguments <data>, <ppm_user>
+            callback (Callback): callback with arguments <data>, <ppm_user>
             *entries (Entry): Entries, in form of (<device>, <param>, <prop>)
+            immediate (bool): Perform synchronous get request before requesting asyncs
+            ppm_user (int): PPM user for request
+            grouping (str): How to group incoming data; see description (`AdoRequest` & `Multirequest` only)
+            **kwargs: Additional arguments for protocol-specific requests
+        
+        Returns:
+            MultinetResponse[Entry, MultinetError]: Errors with Async requests, if exists
 
-        Keyword Arguments:
-            immediate (bool): should callback be called immediately after get_async (default: False)
-            ppm_user (int): which PPM user to listen for asynchronous data on (default: 1)
+        Grouping choices
+            - "ado": every parameter on the same ADO is reported at the same time
+            - "parameter" (default): every property on the same parameter is reported at the same time
+            - "individual": each passed parameter/property is reported individually
         """
         ...
 
@@ -160,9 +240,11 @@ class Request(ABC):
 
         Arguments:
             *entries (Entry): Entries, in form of (<device>, <param>, <prop>)
+            ppm_user (int): PPM user for request
+            **kwargs: Additional arguments for protocol-specific requests
 
         Returns:
-            Dict[Entry, Metadata]: Metadata values
+            MultinetResponse[Entry, Union[Metadata, MultinetError]]: Metadata values or errors
         """
         ...
 
@@ -176,9 +258,10 @@ class Request(ABC):
             *entries (Entry): Entries, in form of (<device>, <param>, <prop>)
             ppm_user (int): PPM user to set (default: 1)
             set_hist (Optional[bool]): Enable/disable set history for this call only; uses global setting by default (default: None)
+            **kwargs: Additional arguments for protocol-specific requests
 
         Returns:
-            bool: did set succeed
+            MultinetResponse[Entry, MultinetError]: Errors while setting, if exists
         """
         ...
 
