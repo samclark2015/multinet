@@ -1,6 +1,4 @@
 import getpass
-import http.client
-import json
 import os
 import socket
 import sys
@@ -13,7 +11,6 @@ from operator import itemgetter
 from typing import *
 
 import requests
-from cad_error import RhicError
 
 from .request import (Callback, Entry, Metadata, MultinetError,
                       MultinetResponse, Request)
@@ -27,13 +24,12 @@ class HttpRequest(Request):
         self.server = server
         self.polling_period = polling_period
         self._context = {}
-
-        self._callbacks: Dict[str, Callback] = {}
+        self._callbacks: Dict[str, Tuple[Callback, bool]] = {}
         self._entries: dict[str, list[Entry]] = {}
+        self._cancel_async = False
         self._lock = threading.Lock()
         self._set_hist = True
-        self._flag = threading.Event()
-        self._thread: threading.Thread = None
+        self._flags = []
 
     @lru_cache(maxsize=32)
     def get_meta(
@@ -53,6 +49,11 @@ class HttpRequest(Request):
             self.logger.debug("<requests.get: %s, text: %s", r, r.text)
             if r.status_code != requests.codes.ok:  # pylint: disable=no-member
                 error = r.headers.get("CAD-Error")
+                self.logger.error(
+                    "Failed to get meta data - HTTP Error: %d, data: %s",
+                    r.status_code,
+                    error,
+                )
                 raise ValueError(error)
             else:
                 metadata[entry] = r.json()
@@ -75,6 +76,11 @@ class HttpRequest(Request):
         self.logger.debug("<requests.get: %s, text: %s", r, r.text)
         if r.status_code != requests.codes.ok:  # pylint: disable=no-member
             error = r.headers.get("CAD-Error")
+            self.logger.error(
+                "Failed to get data - HTTP Error: %d, data: %s",
+                r.status_code,
+                error,
+            )
             data = {entry: MultinetError(error) for entry in entries}
         else:
             for entry in r.json():
@@ -128,8 +134,24 @@ class HttpRequest(Request):
             data = {entry: MultinetError(exc) for entry in entries}
         if r.status_code != requests.codes.ok:  # pylint: disable=no-member
             error = r.headers.get("CAD-Error")
+            self.logger.error(
+                "Failed to set value - HTTP Error %d, data: %s", r.status_code, error
+            )
             data = {entry: MultinetError(error) for entry in entries}
         return data
+
+    def cancel_async(self):
+        for flag in self._flags:
+            flag.set()
+        reqs = [
+            self.server + "/DeviceServer/api/device/async/cancel?id=" + str(id)
+            for id in self._callbacks
+        ]
+        for req in reqs:
+            requests.get(req, headers={"Accept": "application/json"})
+
+        self._flags.clear()
+        self._callbacks.clear()
 
     def get_async(
         self,
@@ -140,140 +162,111 @@ class HttpRequest(Request):
         timestamp=True,
         **kwargs,
     ) -> Dict[Entry, MultinetError]:
-        if "timestamp" in kwargs:
-            warnings.warn("'timestamp' keyword argument deprecated; use 'valueAndTime' property instead.", DeprecationWarning)
-
-        entries, data = self._parse_entries(entries, timestamps=kwargs.get("timestamp", False))
+        entries, data = self._parse_entries(entries)
         names, props = self._unpack_args(*entries)
-
         payload = {"names": names, "props": props, "ppmuser": ppm_user}
         url = HTTP_SERVER + "/DeviceServer/api/device/list/numeric/async"
-
         r = requests.get(url, params=payload)
         if r.status_code != requests.codes.ok:  # pylint: disable=no-member
             error = r.headers.get("CAD-Error")
+            self.logger.error(
+                "Failed to start async - HTTP Error %d, data: %s", r.status_code, error
+            )
             return {entry: MultinetError(error) for entry in entries}
-        
-        # subscription ID, should be used in subsequent polling for result.
-        rid = r.text
-        with self._lock:
-            self._callbacks[rid] = callback  # register the callback function
-            self._entries[rid] = entries
-            if self._thread is None:
-                thread = self._thread = threading.Thread(
-                    target=self._async_thread, daemon=True
-                )
-                thread.start()
+        rid = (
+            r.text
+        )  # subscription ID, should be used in subsequent polling for result.
+        self._callbacks[rid] = callback, timestamp  # register the callback function
+        self._entries[rid] = entries
+        self._cancel_async = False
+        flag = threading.Event()
+        self._flags.append(flag)
+        thread = threading.Thread(
+            target=self._async_thread, args=(rid, immediate, flag), daemon=True
+        )
+        thread.start()
         return data
-
-    def cancel_async(self):
-        self._flag.set()
-        with self._lock:
-            if self._thread:
-                self._thread.join()
-            self._thread = None
-
-            reqs = [
-                self.server + "/DeviceServer/api/device/async/cancel?id=" + str(id)
-                for id in self._entries.keys()
-            ]
-            self._entries.clear()
-            self._callbacks.clear()
-            self._flag.clear()
-
-        for req in reqs:
-            requests.get(req, headers={"Accept": "application/json"})
 
     def set_history(self, enabled):
         self._set_hist = enabled
 
-    def _async_thread(self):
-        endpoint = "/DeviceServer/api/device/async/result"
-
-        if self.server.startswith("https://"):
-            client = http.client.HTTPSConnection(self.server.removeprefix("https://"))
-        else:
-            client = http.client.HTTPConnection(self.server.removeprefix("http://"))
-
-        while not self._flag.wait(self.polling_period):        
-            with self._lock:
-                ids = list(self._entries.keys())
-
-            responses = (
-                client.request(
-                    "GET",
-                    endpoint + f"?id={id_}",
-                    headers={"Accept": "application/json"},
-                )
-                or client.getresponse()
-                for id_ in self._entries
-            )
-            id_responses = (
-                response.begin() or (id_, response)
-                for id_, response in zip(ids, responses)
-                if response.status < 300
-            )
-            id_data = [(id, json.load(response)) for id, response in id_responses]
-            
+    def _async_thread(self, rid, immediate, flag: threading.Event):
+        # internal thread function. It polls for http results and
+        # calls user callback when any data have been received
+        payload = {"id": rid}
+        headers = {"Accept": "application/json"}
+        url = HTTP_SERVER + "/DeviceServer/api/device/async/result"
+        count = 0
+        callback, timestamp = self._callbacks[rid]
+        entries = self._entries[rid]
+        
+        while not flag.wait(self.polling_period):
+            r = requests.get(url, payload, headers=headers)
             recv_time = time.time_ns()
+            if r.status_code == requests.codes.ok:  # pylint: disable=no-member
+                response = r.json()
+                nvals = response["ndata"]
+                if nvals > 0:
+                    device_data = response["deviceData"]
+                    for ppm_user, data in groupby(
+                        device_data, itemgetter("ppmuser")
+                    ):
+                        results = []
+                        data = list(data)
+                        for item in data:
+                            print(data)
+                            device = item["device"]
+                            others = item["property"].split(":")
+                            key: Entry = (device, *others)  # type: ignore
+                            if len(key) == 2:
+                                key = (*key, "value")
+                        
+                            if "value" not in item and "data" not in item:
+                                warnings.warn(f"Unable to get {key}; {item['error']}")
+                                continue
 
-            for id_, group in id_data:
-                response = MultinetResponse()
-                callback = self._callbacks[id_]
-                ppm_user = None
+                            type_ = item["type"]
+                            if "data" in item:
+                                if item["isarray"]:
+                                    value = item["data"]
+                                else:
+                                    value = item["data"][0]
+                            else:
+                                value = item["value"]
+                                value = self._convert_value(value, type_)
+                            ppm_user = item["ppmuser"]
 
-                group_data = {}
+                            results.append((key, value))
 
-                if group["ndata"] == 0:
-                    continue
+                            if timestamp and "timestamp" in item:
+                                response[(*key[:2], "timestamp")] = item["timestamp"]
 
-                for item in group["deviceData"]:
-                    device: str = item["device"]
-                    prop: str = item["property"]
-                    (param, prop) = (
-                        prop.split(":", 1) if ":" in prop else (prop, "value")
-                    )
+                        with self._lock:
+                            grouped = groupby(
+                                sorted(results, key=itemgetter(0)),
+                                itemgetter(0),
+                            )
+                            matched = [[v for v in g] for _, g in grouped]
+                            for group in zip(*matched):
+                                if immediate or count > 0:
+                                    zipped_dict = dict(group)
+                                    zipped_dict = self._filter_data(
+                                        zipped_dict, ppm_user
+                                    )
+                                    if zipped_dict:
+                                        callback(
+                                            MultinetResponse(zipped_dict), ppm_user
+                                        )  # call the user callback
+                                count += 1
+            else:
+                error = r.headers.get("CAD-Error")
+                self.logger.error(
+                    "Failed to process async - HTTP Error: %d, %s", r.status_code, error
+                )
 
-                    if "error" in item:
-                        response[device, param, prop] = MultinetError(item["error"])
-                        continue
-                    
-                    if "data" in item:
-                        value = item["data"]
-                    elif "value" in item:
-                        value = item["value"]
-                    else:
-                        response[device, param, prop] = MultinetError(RhicError.ADO_NO_DATA)
-                        continue
-
-                    if ppm_user is None:
-                        ppm_user: int = item["ppmuser"]
-                    elif item["ppmuser"] != ppm_user:
-                        raise ValueError(
-                            f"PPM User Mismatch in Async: {ppm_user} != {item['ppm_user']}"
-                        )
-
-
-                    if "isarray" in item and not item["isarray"]:
-                        value = value[0]
-
-                    group_data[device, param, prop] = value
-                
-                for key in self._entries[id_]:
-                    if key in group_data:
-                        response[key] = group_data[key]
-                    elif key[-1] == "timestampSeconds":
-                        response[key] = int(recv_time // 1e9)
-                        response[(*key[:-1], "timeStampSource")] = "ArrivalLocal"
-                    elif key[-1] == "timestampNanoSeconds":
-                        response[key] = int(recv_time % 1e9)
-                        response[(*key[:-1], "timeStampSource")] = "ArrivalLocal"
-                    else:
-                        response[key] = MultinetError(RhicError.ADO_DATA_MISSING)
-
-                response = self._filter_data(response, ppm_user)
-                if response:
-                    callback(response, ppm_user)
+                return 1
+        self.logger.info("_async_thread: exiting")
+        return 0
 
     def _get_context(self, with_sethist):
         if with_sethist not in self._context:
