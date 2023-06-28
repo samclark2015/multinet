@@ -152,6 +152,9 @@ class MultinetError(Exception):
         super().__init__(err)
         self.rhic_code = err
 
+    def __bool__(self):
+        return self.rhic_code == RhicError.SUCCESS
+
 
 Metadata = MultinetResponse[str, Any]
 """Metadata dictionary type alias
