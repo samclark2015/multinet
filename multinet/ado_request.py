@@ -1,4 +1,5 @@
 import copy
+import time
 import warnings
 from itertools import groupby
 from operator import itemgetter
@@ -126,10 +127,18 @@ class AdoRequest(Request):
             data, status = adoIf.adoGet(
                 list=[(handle, *rest) for _, *rest in group], ppmIndex=ppm_user - 1
             )
+            recv_time = time.time_ns()
             data_iter = iter(data)
             for entry, st in zip(group, status):
                 if st != 0:
-                    response[entry] = MultinetError(st)
+                    if entry[-1] == "timestampSeconds":
+                        response[entry] = int(recv_time // 1e9)
+                        response[(*entry[:-1], "timeStampSource")] = "ArrivalLocal"
+                    elif entry[-1] == "timestampNanoSeconds":
+                        response[entry] = int(recv_time % 1e9)
+                        response[(*entry[:-1], "timeStampSource")] = "ArrivalLocal"
+                    else:
+                        response[entry] = MultinetError(st)
                     continue
                 value = next(data_iter)
                 if value is None:
@@ -274,8 +283,9 @@ class AdoRequest(Request):
 
     @classmethod
     def _async_callback(cls, arg):
+        recv_time = time.time_ns()
         data, tid, requests, istatus, ppm_index = arg
-        entries, metadata, callback, inst = cls._tid_map.get(tid, (None, None, None))
+        entries, metadata, callback, inst = cls._tid_map.get(tid, (None, None, None, None))
         if entries is None:
             # TODO: Race condition?
             return
@@ -285,7 +295,14 @@ class AdoRequest(Request):
         response = MultinetResponse()
         for entry, st in zip(entries, istatus):
             if st != 0:
-                response[entry] = MultinetError(st)
+                if entry[-1] == "timestampSeconds":
+                    response[entry] = int(recv_time // 1e9)
+                    response[(*entry[:-1], "timeStampSource")] = "ArrivalLocal"
+                elif entry[-1] == "timestampNanoSeconds":
+                    response[entry] = int(recv_time % 1e9)
+                    response[(*entry[:-1], "timeStampSource")] = "ArrivalLocal"
+                else:
+                    response[entry] = MultinetError(st)                
                 continue
             value = next(data_iter)
             response[entry] = (
