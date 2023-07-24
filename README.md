@@ -72,35 +72,32 @@ Calls to `get_async` may request an initial dataset to be processed immediately 
 
 ### Handling Errors
 
-Errors getting an entry when calling `.get(...)` will result in the value for that entry being an instance of `MultinetError`.
+All calls to Multinet methods return a MultinetResponse datastructure which contains data, and multiple methods to interact with Rhic Status codes. 
 
 ```python
 from multinet import Multirequest, MultinetError
 
 req = Multirequest()
-data = req.get(("simple.test", "intS"))
-intS = data[("simple.test", "intS")]
+response = req.get(("simple.test", "intS"))
 
-if isinstance(intS, MultinetError):
-    # handle error
-    print("Error getting intS", intS)
-else:
-    # handle good data
-    pass
+
+for key in response:
+    error = response.get_status(key)
+    if error != 0:
+        # Handle Error
+        print("Got an error", error)
+    else:
+        # Handle success
+        print("The value is", response[key])
 ```
 
-Errors while setting will result in the `.set(...)` call returning a `MultinetError` instance.
-
-```python
-from multinet import Multirequest
-
-req = Multirequest()
-err = req.get(("simple.test", "intS", 4))
-
-# If err is not None, then it is a MultinetError
-if err is not None:
-    print("Error setting intS", err)
-```
+The MultinetResponse class also has the following methods:
+- Returns MultinetError instance or None for key, indicating an error \
+`get_error(key: Entry) -> MultinetError`
+- Return RhicError instance for key, may be RhicError.SUCCESS \
+`get_status(key: Entry) -> RhicError`
+- Returns a dict of *only* the errors \
+`get_errors() -> Dict[Entry, MultinetError]`
 
 ## Async Grouping
 Async requests issued to an ADO-type device may be grouped in various ways. This controls how data is returned and processed by the callback function. This is controlled by the `grouping="..."` keyword argument to the `get_async()` method. The options available are:
