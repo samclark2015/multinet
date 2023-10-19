@@ -59,10 +59,13 @@ class HttpRequest(Request):
         return metadata
 
     def get(
-        self, *entries: Entry, ppm_user=1, timestamp=True, **kwargs
+        self, *entries: Entry, ppm_user: Union[int, Iterable[int]] =1, timestamp=True, **kwargs
     ) -> Dict[Entry, Any]:
         entries, data = self._parse_entries(entries)
         names, props = self._unpack_args(*entries)
+        if isinstance(ppm_user, Iterable):
+            warnings.warn("HttpRequest get does not support multiple ppm users.  Processing with first user in Iterable only", FutureWarning)
+            ppm_user = ppm_user[0]
         payload = dict(names=names, props=props, ppmuser=ppm_user)
         httpreq = self.server + "/DeviceServer/api/device/list/numeric/valueAndTime"
         self.logger.debug("request: %s", httpreq)
@@ -135,7 +138,7 @@ class HttpRequest(Request):
         self,
         callback: Callback,
         *entries: Entry,
-        ppm_user=1,
+        ppm_user: Union[int, Iterable[int]]=1,
         immediate=False,
         timestamp=True,
         **kwargs,
@@ -145,6 +148,10 @@ class HttpRequest(Request):
 
         entries, data = self._parse_entries(entries, timestamps=kwargs.get("timestamp", False))
         names, props = self._unpack_args(*entries)
+
+        if isinstance(ppm_user, Iterable):
+            warnings.warn("HttpRequest get_async does not support multiple ppm users.  Processing with first user in Iterable only", FutureWarning)
+            ppm_user = ppm_user[0]
 
         payload = {"names": names, "props": props, "ppmuser": ppm_user}
         url = HTTP_SERVER + "/DeviceServer/api/device/list/numeric/async"

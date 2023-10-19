@@ -37,7 +37,7 @@ class AdoRequest(Request):
         self,
         callback: Callback,
         *entries: Entry,
-        ppm_user=1,
+        ppm_user: Union[int, Iterable[int]] =1,
         immediate=False,
         grouping="parameter",
         **kwargs,
@@ -72,34 +72,45 @@ class AdoRequest(Request):
         else:
             raise ValueError(f"Invalid grouping type '{grouping}'")
 
-        if ppm_user < 1 or ppm_user > 8:
-            ppm_user = self.default_ppm_user()
-        self.logger.debug("args[%d]: %s", len(entries), entries)
+        if not isinstance(ppm_user, Iterable):
+            ppm_user = [ppm_user]
 
-        async_id = next(self._mreq_tid_iter)
-        io_tids = []
-        for group in grouped_entries:
-            if immediate:
-                callback(
-                    self.get(*group, ppm_user=ppm_user), ppm_user
-                )
-            group = list(group)
-            ado_name = group[0][0]
-            handle = self._get_handle(ado_name)
-            if not handle:
-                response.update(
-                    dict.fromkeys(group, MultinetError(RhicError.IO_BAD_NAME))
-                )
+        # invalid_user will be used to allow only ONE default_ppm_user to be used when checking ppm_user array
+        num_default_ppm_user = 0
+        default_user = self.default_ppm_user()
+        for puser in ppm_user:
+            if puser < 1 or puser > 8:
+                puser = default_user
+                num_default_ppm_user += 1
+            # avoid duplicate ppm requests
+            if (ppm_user.count(puser) > 1) or (puser == default_user and num_default_ppm_user>0):
                 continue
-            tid, status = adoIf.adoGetAsync(
-                list=[(handle, *rest) for _, *rest in group],
-                ppmIndex=ppm_user - 1,
-                callback=self._async_callback,
-            )
-            self._tid_map[tid] = (group, metadata, callback, self)
-            io_tids.append(tid)
-            for entry, st in zip(group, status):
-                response[entry] = None if st == 0 else MultinetError(st)
+            self.logger.debug("args[%d]: %s", len(entries), entries)
+
+            async_id = next(self._mreq_tid_iter)
+            io_tids = []
+            for group in grouped_entries:
+                if immediate:
+                    callback(
+                        self.get(*group, ppm_user=puser), puser
+                    )
+                group = list(group)
+                ado_name = group[0][0]
+                handle = self._get_handle(ado_name)
+                if not handle:
+                    response.update(
+                        dict.fromkeys(group, MultinetError(RhicError.IO_BAD_NAME))
+                    )
+                    continue
+                tid, status = adoIf.adoGetAsync(
+                    list=[(handle, *rest) for _, *rest in group],
+                    ppmIndex=puser - 1,
+                    callback=self._async_callback,
+                )
+                self._tid_map[tid] = (group, metadata, callback, self)
+                io_tids.append(tid)
+                for entry, st in zip(group, status):
+                    response[entry] = None if st == 0 else MultinetError(st)
                 
         self._async_id_map[async_id] = io_tids
         response.tid = async_id
@@ -112,8 +123,12 @@ class AdoRequest(Request):
             warnings.warn("'timestamp' keyword argument deprecated; use 'valueAndTime' property instead.", DeprecationWarning)
 
         entries, response = self._parse_entries(entries, timestamps=kwargs.get("timestamp", False))
-        if ppm_user < 1 or ppm_user > 8:
-            ppm_user = self.default_ppm_user()
+        if not isinstance(ppm_user, Iterable):
+            ppm_user = [ppm_user]
+        for i, ppm in enumerate(ppm_user):
+            if ppm < 1 or ppm > 8:
+                # if a ppm user is duplicated, we'll allow it since it's just a synchronous request.
+                ppm_user[i] = self.default_ppm_user()
 
         for ado_name, group in groupby(entries, itemgetter(0)):
             group = list(group)
@@ -124,29 +139,33 @@ class AdoRequest(Request):
                 )
                 continue
             metadata = self.get_meta(*group)
-            data, status = adoIf.adoGet(
-                list=[(handle, *rest) for _, *rest in group], ppmIndex=ppm_user - 1
-            )
-            recv_time = time.time_ns()
-            data_iter = iter(data)
-            for entry, st in zip(group, status):
-                if st != 0:
-                    if entry[-1] == "timestampSeconds":
-                        response[entry] = int(recv_time // 1e9)
-                        response[(*entry[:-1], "timeStampSource")] = "ArrivalLocal"
-                    elif entry[-1] == "timestampNanoSeconds":
-                        response[entry] = int(recv_time % 1e9)
-                        response[(*entry[:-1], "timeStampSource")] = "ArrivalLocal"
-                    else:
-                        response[entry] = MultinetError(st)
-                    continue
-                value = next(data_iter)
-                if value is None:
-                    response[entry] = value
-                    continue
-                response[entry] = (
-                    value[0] if metadata[entry]["count"] == 1 else list(value)
+            for puser in ppm_user:
+                data, status = adoIf.adoGet(
+                    list=[(handle, *rest) for _, *rest in group], ppmIndex=puser - 1
                 )
+                recv_time = time.time_ns()
+                data_iter = iter(data)
+                for entry, st in zip(group, status):
+                    if st != 0:
+                        if entry[-1] == "timestampSeconds":
+                            response[entry] = int(recv_time // 1e9)
+                            response[(*entry[:-1], "timeStampSource")] = "ArrivalLocal"
+                        elif entry[-1] == "timestampNanoSeconds":
+                            response[entry] = int(recv_time % 1e9)
+                            response[(*entry[:-1], "timeStampSource")] = "ArrivalLocal"
+                        else:
+                            response[entry] = MultinetError(st)
+                        continue
+                    value = next(data_iter)
+                    if value is None:
+                        response[entry] = value
+                        continue
+                    key = entry
+                    if len(ppm_user) > 1:
+                        key = entry + (puser,)
+                    response[key] = (
+                        value[0] if metadata[entry]["count"] == 1 else list(value)
+                    )
         return response
 
     def get_meta(

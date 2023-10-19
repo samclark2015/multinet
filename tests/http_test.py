@@ -39,7 +39,7 @@ def test_multiset(req: HttpRequest, ado_req: IORequest):
 def test_async(req: HttpRequest):
     import math
 
-    keys = [("simple.test", "sinM"), ("simple.test", "degM")]
+    keys = [("simple.test", "sinM"), ("simple.test", "degM"), ("simple.test", "stringS")]
     counter = 0
     condition = Condition()
 
@@ -52,7 +52,9 @@ def test_async(req: HttpRequest):
         with condition:
             condition.notify_all()
 
-    req.get_async(cb, *keys)
+    # ppm_user only supports a single value but the API allows for an iterable to be consistent with
+    # AdoRequest.  The result will be to issue a warning and only process the first ppm user in the iterable
+    req.get_async(cb, *keys, ppm_user=[1, 2, 3, 4])
     with condition:
         condition.wait_for(lambda: counter >= 20, 10)
     req.cancel_async()
