@@ -143,6 +143,9 @@ class AdoRequest(Request):
                 data, status = adoIf.adoGet(
                     list=[(handle, *rest) for _, *rest in group], ppmIndex=puser - 1
                 )
+                if data is None:
+                    # this means none of the data reported successfully
+                    data = []
                 recv_time = time.time_ns()
                 data_iter = iter(data)
                 for entry, st in zip(group, status):
