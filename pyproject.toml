@@ -1,0 +1,10 @@
+[project]
+name = "multinet"
+dynamic = ["version"]
+
+[tool.pdm.version]
+source = "scm"
+
+[build-system]
+requires = ["pdm-backend", "cad-build"]
+build-backend = "pdm.backend"
