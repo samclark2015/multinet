@@ -25,18 +25,22 @@ from multinet import Multirequest
 request = Multirequest()
 
 # Getting data synchronously from an ADO device and a CDEV device in one call
-request.get(("simple.test", "intS"), ("simple.cdev", "degM"))
+response = request.get("simple.test:intS", "simple.cdev:degM")
+intS = response["simple.test:intS"]
+degM = response["simple.cdev:degM"]
+
 # With a PPM User (this kwarg can be used on any call)
-request.get(("simple.test", "intS"), ppm_user=5)
+response = request.get("simple.test:intS", ppm_user=5)
+intS_ppm5 = response["simple.test:intS"]
 
 # Getting data asynchronously
 def callback(data, ppm_user):
     print(data, ppm_user)
 
-request.get_async(callback, ("simple.test", "sinM"), ("simple.cdev", "degM"))
+request.get_async(callback, "simple.test:sinM", "simple.cdev:degM")
 
 # Setting data
-request.set(("simple.test", "intS", 7), ("simple.cdev", "doubleS", 3.14))
+request.set({"simple.test:intS": 7, "simple.cdev:doubleS", 3.14})
 ```
 
 
