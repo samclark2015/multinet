@@ -87,10 +87,18 @@ class HttpRequest(Request):
                 if "error" in entry:
                     if key[-1] == "timestampSeconds":
                         data[key] = int(recv_time // 1e9)
+                        data[(*key[:-1], "timeStampSource")] = "ArrivalLocal"
                     elif key[-1] == "timestampNanoSeconds":
                         data[key] = int(recv_time % 1e9)
+                        data[(*key[:-1], "timeStampSource")] = "ArrivalLocal"
                     else:
                         data[key] = MultinetError(entry["error"])
+                elif "timestamp" in entry and "value" in entry and entry["value"] == 0:
+                    if key[-1] == "timestampSeconds":
+                        data[key] = int(recv_time // 1e9)
+                    elif key[-1] == "timestampNanoSeconds":
+                        data[key] = int(recv_time % 1e9)
+                    data[(*key[:-1], "timeStampSource")] = "ArrivalLocal"
                 else:
                     type_ = entry["type"]
                     if "value" in entry.keys():

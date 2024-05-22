@@ -152,10 +152,10 @@ class AdoRequest(Request):
                     if st != 0:
                         if entry[-1] == "timestampSeconds":
                             response[entry] = int(recv_time // 1e9)
-                            response[(*entry[:-1], "timeStampSource")] = "ArrivalLocal"
+                            response[(*entry[:-1], "timestampSource")] = "ArrivalLocal"
                         elif entry[-1] == "timestampNanoSeconds":
                             response[entry] = int(recv_time % 1e9)
-                            response[(*entry[:-1], "timeStampSource")] = "ArrivalLocal"
+                            response[(*entry[:-1], "timestampSource")] = "ArrivalLocal"
                         else:
                             response[entry] = MultinetError(st)
                         continue
@@ -163,12 +163,22 @@ class AdoRequest(Request):
                     if value is None:
                         response[entry] = value
                         continue
+
                     key = entry
                     if len(ppm_user) > 1:
                         key = entry + (puser,)
-                    response[key] = (
-                        value[0] if metadata[entry]["count"] == 1 else list(value)
-                    )
+                    
+                    value = value[0] if metadata[entry]["count"] == 1 else list(value)
+                    if value == 0 and entry[-1] in ("timestampSeconds", "timestampNanoSeconds"):
+                        if entry[-1] == "timestampSeconds":
+                            response[entry] = int(recv_time // 1e9)
+                            response[(*entry[:-1], "timestampSource")] = "ArrivalLocal"
+                        elif entry[-1] == "timestampNanoSeconds":
+                            response[entry] = int(recv_time % 1e9)
+                            response[(*entry[:-1], "timestampSource")] = "ArrivalLocal"
+                        continue
+
+                    response[key] = value
         return response
 
     def get_meta(
@@ -319,14 +329,24 @@ class AdoRequest(Request):
             if st != 0:
                 if entry[-1] == "timestampSeconds":
                     response[entry] = int(recv_time // 1e9)
-                    response[(*entry[:-1], "timeStampSource")] = "ArrivalLocal"
+                    response[(*entry[:-1], "timestampSource")] = "ArrivalLocal"
                 elif entry[-1] == "timestampNanoSeconds":
                     response[entry] = int(recv_time % 1e9)
-                    response[(*entry[:-1], "timeStampSource")] = "ArrivalLocal"
+                    response[(*entry[:-1], "timestampSource")] = "ArrivalLocal"
                 else:
                     response[entry] = MultinetError(st)                
                 continue
+
             value = next(data_iter)
+            if value == 0 and entry[-1] in ("timestampSeconds", "timestampNanoSeconds"):
+                if entry[-1] == "timestampSeconds":
+                    response[entry] = int(recv_time // 1e9)
+                    response[(*entry[:-1], "timestampSource")] = "ArrivalLocal"
+                elif entry[-1] == "timestampNanoSeconds":
+                    response[entry] = int(recv_time % 1e9)
+                    response[(*entry[:-1], "timestampSource")] = "ArrivalLocal"
+                continue
+
             response[entry] = (
                 value[0] if metadata[entry]["count"] == 1 else list(value)
             )
